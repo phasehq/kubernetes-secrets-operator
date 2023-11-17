@@ -3,9 +3,9 @@ entries:
   phase-kubernetes-operator:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2023-11-16T16:40:17.321166811+05:30"
+    created: "2023-11-17T13:37:17.319489737+05:30"
     description: A Helm chart for deploying the Phase Kubernetes Operator
-    digest: 77767653ec8a7dc0e5350291daf343e45aa5e8e9782d0f4e3d40d6a59a7482a5
+    digest: b52696267af72b43a41c62ae801b1e507d37b40ee6ec14cafd03a0fc3f407d9a
     home: https://github.com/phasehq/kubernetes-secrets-operator
     keywords:
     - phase
@@ -20,6 +20,6 @@ entries:
     - https://github.com/phasehq/kubernetes-secrets-operator
     type: application
     urls:
-    - https://helm.phase.dev/phase-kubernetes-operator-0.1.0.tgz
+    - https://helm.phase.dev/helm-repo/phase-kubernetes-operator-0.1.0.tgz
     version: 0.1.0
-generated: "2023-11-16T16:40:17.320828271+05:30"
+generated: "2023-11-17T13:37:17.319169201+05:30"

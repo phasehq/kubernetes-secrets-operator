@@ -12,6 +12,7 @@ spec:
       labels:
         app: {{ include "phase-kubernetes-operator.fullname" . }}
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext:
         runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
         runAsUser: {{ .Values.securityContext.runAsUser }}

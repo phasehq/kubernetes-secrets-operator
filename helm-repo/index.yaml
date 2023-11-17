@@ -20,6 +20,6 @@ entries:
     - https://github.com/phasehq/kubernetes-secrets-operator
     type: application
     urls:
-    - https://helm.phase.dev/helm-repo/phase-kubernetes-operator-0.1.0.tgz
+    - https://helm.phase.dev/phase-kubernetes-operator-0.1.0.tgz
     version: 0.1.0
 generated: "2023-11-17T13:37:17.319169201+05:30"

@@ -18,6 +18,6 @@ keywords:
 maintainers:
   - name: Phase Security Inc.
     email: info@phase.dev
-home: https://github.com/phasehq/kubernetes-operator
+home: https://github.com/phasehq/kubernetes-secrets-operator
 sources:
-  - https://github.com/phasehq/kubernetes-operator
+  - https://github.com/phasehq/kubernetes-secrets-operator

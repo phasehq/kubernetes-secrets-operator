@@ -1,5 +1,4 @@
-from typing import Optional
-import requests, json
+import requests
 from typing import Tuple
 from typing import List
 from dataclasses import dataclass
@@ -13,18 +12,11 @@ from src.utils.network import (
     delete_phase_secrets
 )
 from nacl.bindings import (
-    crypto_kx_keypair, 
-    crypto_aead_xchacha20poly1305_ietf_encrypt, 
-    crypto_aead_xchacha20poly1305_ietf_decrypt,
-    randombytes, 
-    crypto_secretbox_NONCEBYTES, 
     crypto_kx_server_session_keys, 
-    crypto_kx_client_session_keys,
-    crypto_kx_seed_keypair,
 )
 from src.utils.crypto import CryptoUtils
-from src.utils.const import __ph_version__, PHASE_ENV_CONFIG, pss_user_pattern, pss_service_pattern
-from src.utils.misc import phase_get_context, get_default_user_host
+from src.utils.const import __ph_version__, pss_user_pattern, pss_service_pattern
+from src.utils.misc import phase_get_context, get_default_user_host, normalize_tag, tag_matches
 from src.utils.keyring import get_credentials
 
 @dataclass
@@ -58,7 +50,7 @@ class Phase:
             self._api_host = get_default_user_host()
         else:
             if not pss or not host:
-                raise ValueError("Invalid PHASE_HOST or PHASE_SERVICE_TOKEN")
+                raise ValueError("Both pss and host must be provided when init is set to False.")
             app_secret = pss
             self._api_host = host
 
@@ -152,18 +144,18 @@ class Phase:
         return create_phase_secrets(self._token_type, self._app_secret.app_token, env_id, secrets, self._api_host)
 
 
-    def get(self, env_name: str, keys: List[str] = None, app_name: str = None):
+    def get(self, env_name: str, keys: List[str] = None, app_name: str = None, tag: str = None) -> List[dict]:
         """
-        Get secrets from Phase KMS based on key and environment.
-        
+        Get secrets from Phase KMS based on key and environment, with support for personal overrides, optional tag matching, and decrypting comments.
+
         Args:
-            key (str, optional): The key for which to retrieve the secret value.
             env_name (str): The name (or partial name) of the desired environment.
+            keys (List[str], optional): The keys for which to retrieve the secret values.
             app_name (str, optional): The name of the desired application.
-                
+            tag (str, optional): The tag to match against the secrets.
+
         Returns:
-            dict or list: A dictionary containing the decrypted key and value if key is provided, 
-                        otherwise a list of dictionaries for all secrets in the environment.
+            List[dict]: A list of dictionaries for all secrets in the environment that match the criteria.
         """
         
         user_response = fetch_phase_user(self._token_type, self._app_secret.app_token, self._api_host)
@@ -187,11 +179,30 @@ class Phase:
 
         results = []
         for secret in secrets_data:
-            decrypted_key = CryptoUtils.decrypt_asymmetric(secret["key"], env_private_key, public_key)
-            if keys and decrypted_key not in keys:
+            if tag and not tag_matches(secret.get("tags", []), tag):
                 continue
-            decrypted_value = CryptoUtils.decrypt_asymmetric(secret["value"], env_private_key, public_key)
-            results.append({"key": decrypted_key, "value": decrypted_value})
+
+            secret_id = secret["id"]
+            override = secret.get("override")
+            use_override = override and override.get("secret") == secret_id and override.get("is_active")
+
+            key_to_decrypt = secret["key"]
+            value_to_decrypt = override["value"] if use_override else secret["value"]
+            comment_to_decrypt = secret["comment"]
+
+            decrypted_key = CryptoUtils.decrypt_asymmetric(key_to_decrypt, env_private_key, public_key)
+            decrypted_value = CryptoUtils.decrypt_asymmetric(value_to_decrypt, env_private_key, public_key)
+            decrypted_comment = CryptoUtils.decrypt_asymmetric(comment_to_decrypt, env_private_key, public_key) if comment_to_decrypt else None
+
+            if not keys or decrypted_key in keys:
+                result = {
+                    "key": decrypted_key,
+                    "value": decrypted_value,
+                    "overridden": use_override,
+                    "tags": secret.get("tags", []),
+                    "comment": decrypted_comment
+                }
+                results.append(result)
 
         return results
 
@@ -312,34 +323,9 @@ class Phase:
         delete_phase_secrets(self._token_type, self._app_secret.app_token, env_id, secret_ids_to_delete, self._api_host)
             
         return keys_not_found
+    
 
-
-    # TODO: Remove
-    def encrypt(self, plaintext, tag="") -> Optional[str]:
-        """
-        Encrypts a plaintext string.
-
-        Args:
-            plaintext (str): The plaintext to encrypt.
-            tag (str, optional): A tag to include in the encrypted message. The tag will not be encrypted.
-
-        Returns:
-            str: The encrypted message, formatted as a string that includes the public key used for the one-time keypair, 
-            the ciphertext, and the tag. Returns `None` if an error occurs.
-        """
-        try:
-            one_time_keypair = random_key_pair()
-            symmetric_keys = crypto_kx_client_session_keys(
-                one_time_keypair[0], one_time_keypair[1], bytes.fromhex(self._app_secret.pss_user_public_key))
-            ciphertext = CryptoUtils.encrypt_b64(plaintext, symmetric_keys[1])
-            pub_key = one_time_keypair[0].hex()
-
-            return f"ph:{__ph_version__}:{pub_key}:{ciphertext}:{tag}"
-        except ValueError as err:
-            raise ValueError(f"Something went wrong: {err}")
-
-
-    def decrypt(self, phase_ciphertext) -> Optional[str]:
+    def decrypt(self, phase_ciphertext) -> str | None:
         """
         Decrypts a Phase ciphertext string.
 

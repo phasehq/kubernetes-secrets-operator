@@ -4,7 +4,7 @@ import datetime
 import kubernetes.client
 from kubernetes.client.rest import ApiException
 from kubernetes.client import AppsV1Api
-from src.cmd.secrets.export import phase_secrets_env_export
+from src.cmd.secrets.fetch import phase_secrets_fetch
 
 REDEPLOY_ANNOTATION = "secrets.phase.dev/redeploy"
 
@@ -25,11 +25,10 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         service_token = base64.b64decode(api_response.data['token']).decode('utf-8')
 
         # Fetch secrets from the Phase application
-        fetched_secrets_dict = phase_secrets_env_export(
+        fetched_secrets_dict = phase_secrets_fetch(
             phase_service_token=service_token,
             phase_service_host=phase_host,
             env_name=phase_app_env,
-            export_type='k8'
         )
 
         secret_changed = False

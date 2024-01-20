@@ -32,14 +32,14 @@ def phase_secrets_env_export(phase_service_token=None, phase_service_host=None, 
     for key, value in secrets_dict.items():
         cross_env_matches = re.findall(cross_env_pattern, value)
         for ref_env, ref_key in cross_env_matches:
-            try:
-                ref_secret = phase.get(env_name=ref_env, keys=[ref_key], app_name=phase_app)[0]
-                resolved_value = ref_secret['value']
+            ref_secret = phase.get(env_name=ref_env, keys=[ref_key], app_name=phase_app)
+            if ref_secret:
+                resolved_value = ref_secret[0]['value']
                 if export_type == 'k8':
                     resolved_value = base64.b64encode(resolved_value.encode()).decode()
                 value = value.replace(f"${{{ref_env}.{ref_key}}}", resolved_value)
-            except ValueError as e:
-                print(f"# Warning: The environment '{ref_env}' for key '{key}' either does not exist or you do not have access to it.")
+            else:
+                print(f"# Warning: Secret '{ref_key}' not found in environment '{ref_env}'.")
 
         local_ref_matches = re.findall(local_ref_pattern, value)
         for ref_key in local_ref_matches:

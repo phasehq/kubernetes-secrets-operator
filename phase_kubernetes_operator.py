@@ -6,7 +6,7 @@ from kubernetes.client.rest import ApiException
 from kubernetes.client import AppsV1Api
 from src.cmd.secrets.export import phase_secrets_env_export
 
-REDEPLOY_ANNOTATION = "phase.autoredeploy"
+REDEPLOY_ANNOTATION = "secrets.phase.dev/redeploy"
 
 @kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=60)
 def sync_secrets(spec, name, namespace, logger, **kwargs):

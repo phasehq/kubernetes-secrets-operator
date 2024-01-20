@@ -216,3 +216,52 @@ def get_user_agent():
 
     user_agent_str = ' '.join(details)
     return user_agent_str
+
+
+def transform_name(secret_key, format):
+    """
+    Transforms a secret key from UPPER_SNAKE_CASE to the specified format.
+
+    Args:
+        secret_key (str): The secret key to transform.
+        format (str): The target format ('camel', 'upper-camel', 'lower-snake', 'tf-var', 'dotnet-env', 'lower-kebab').
+
+    Returns:
+        str: The transformed secret key.
+    """
+    words = secret_key.lower().split('_')
+    
+    if format == 'camel':
+        return words[0] + ''.join(word.capitalize() for word in words[1:])
+    elif format == 'upper-camel':
+        return ''.join(word.capitalize() for word in words)
+    elif format == 'lower-snake':
+        return '_'.join(words)
+    elif format == 'tf-var':
+        return 'TF_VAR_' + '_'.join(words)
+    elif format == 'dotnet-env':
+        return '__'.join(word.capitalize() for word in words)
+    elif format == 'lower-kebab':
+        return '-'.join(words)
+    else:
+        return secret_key  # Default: return the key as is if format is unknown
+
+def process_secret(secret_value, processor):
+    """
+    Processes a secret value based on the specified processor.
+
+    Args:
+        secret_value (str): The secret value to process.
+        processor (str): The processor type ('plain', 'b64', 'pkcs12').
+
+    Returns:
+        str: The processed secret value.
+    """
+    if processor == 'b64':
+        return base64.b64encode(secret_value.encode()).decode()
+    # PKCS12 secrets are already base64 encoded, so return as plain to avoid double wrapping.
+    elif processor == 'pkcs12':    
+        return secret_value
+    # Return secrets as plaintext
+    else:
+        return secret_value

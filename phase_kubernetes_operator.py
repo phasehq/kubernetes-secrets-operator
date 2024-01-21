@@ -19,6 +19,9 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         phase_host = spec.get('phaseHost', 'https://console.phase.dev')
         phase_app_env = spec.get('phaseAppEnv', 'production')
         service_token_secret_name = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretName', 'phase-service-token')
+        name_transformer = spec.get('nameTransformer', 'upper_snake')
+        secret_processor = spec.get('secretProcessor', 'b64')
+        secret_format = spec.get('secretFormat', None)
 
         # Fetch and process the Phase service token
         api_response = api_instance.read_namespaced_secret(service_token_secret_name, namespace)
@@ -29,6 +32,9 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
             phase_service_token=service_token,
             phase_service_host=phase_host,
             env_name=phase_app_env,
+            name_transformer=name_transformer,
+            secret_processor=secret_processor,
+            secret_format=secret_format
         )
 
         secret_changed = False

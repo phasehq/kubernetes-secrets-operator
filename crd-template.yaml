@@ -31,7 +31,7 @@ spec:
                 phaseAppEnv:
                   description: The environment variable representing the app environment in Phase.
                   type: string
-                  default: "development"
+                  default: "production"
                 authentication:
                   properties:
                     serviceToken:
@@ -45,11 +45,11 @@ spec:
                               description: The namespace where the Kubernetes Secret is located.
                               type: string
                           required:
-                          - secretName
-                          - secretNamespace
+                            - secretName
+                            - secretNamespace
                           type: object
                       required:
-                      - serviceTokenSecretReference
+                        - serviceTokenSecretReference
                       type: object
                   type: object
                 phaseHost:
@@ -67,20 +67,31 @@ spec:
                       secretNamespace:
                         description: The namespace where the Kubernetes Secret is located.
                         type: string
+                      secretType:
+                        description: The type of the Kubernetes Secret.
+                        type: string
+                        enum:
+                          - "Opaque"
+                          - "kubernetes.io/tls"
+                          - "kubernetes.io/service-account-token"
+                          - "kubernetes.io/dockercfg"
+                          - "kubernetes.io/dockerconfigjson"
+                          - "kubernetes.io/basic-auth"
+                          - "kubernetes.io/ssh-auth"
+                          - "bootstrap.kubernetes.io/token"
                     required:
-                    - secretName
-                    - secretNamespace
+                      - secretName
+                      - secretNamespace
+                      - secretType
                     type: object
                 pollingInterval:
                   description: Interval at which to poll for secret updates.
                   type: integer
                   default: 60
-                  minimum: 15
               required:
-              - phaseAppEnv
-              - managedSecretReferences
-              - phaseHost
-              - pollingInterval
+                - phaseAppEnv
+                - managedSecretReferences
+                - phaseHost
               type: object
             status:
               description: PhaseSecretStatus defines the observed state of PhaseSecret
@@ -110,24 +121,24 @@ spec:
                       status:
                         description: status of the condition, one of True, False, Unknown.
                         enum:
-                        - "True"
-                        - "False"
-                        - "Unknown"
+                          - "True"
+                          - "False"
+                          - "Unknown"
                         type: string
                       type:
                         description: type of condition in CamelCase or in foo.example.com/CamelCase.
                         maxLength: 316
                         type: string
                     required:
-                    - lastTransitionTime
-                    - message
-                    - reason
-                    - status
-                    - type
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
                     type: object
                   type: array
               required:
-              - conditions
+                - conditions
               type: object
       served: true
       storage: true

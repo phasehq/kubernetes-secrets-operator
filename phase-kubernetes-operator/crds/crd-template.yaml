@@ -33,6 +33,9 @@ spec:
                   description: The environment variable representing the app environment in Phase.
                   type: string
                   default: "production"
+                phaseAppEnvTag:
+                  description: Tag for filtering secrets in the specified Phase app environment.
+                  type: string
                 authentication:
                   type: object
                   properties:

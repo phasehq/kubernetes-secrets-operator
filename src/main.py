@@ -18,15 +18,17 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         managed_secret_references = spec.get('managedSecretReferences', [])
         phase_host = spec.get('phaseHost', 'https://console.phase.dev')
         phase_app_env = spec.get('phaseAppEnv', 'production')
+        phase_app_env_tag =  spec.get('phaseAppEnvTag', 'none')
         service_token_secret_name = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretName', 'phase-service-token')
-        
+
         api_response = api_instance.read_namespaced_secret(service_token_secret_name, namespace)
         service_token = base64.b64decode(api_response.data['token']).decode('utf-8')
 
         fetched_secrets_dict = phase_secrets_fetch(
             phase_service_token=service_token,
             phase_service_host=phase_host,
-            env_name=phase_app_env
+            env_name=phase_app_env,
+            tags=phase_app_env_tag
         )
 
         secret_changed = False

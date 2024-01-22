@@ -9,7 +9,7 @@ from src.cmd.secrets.fetch import phase_secrets_fetch
 
 REDEPLOY_ANNOTATION = "secrets.phase.dev/redeploy"
 
-@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=10)
+@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=60)
 def sync_secrets(spec, name, namespace, logger, **kwargs):
     try:
         api_instance = CoreV1Api()
@@ -44,7 +44,7 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
                     # Delete and recreate the secret if the type has changed
                     api_instance.delete_namespaced_secret(name=secret_name, namespace=secret_namespace)
                     logger.info(f"Deleted existing secret {secret_name} in namespace {secret_namespace} due to type change.")
-                    create_secret(api_instance, secret_name, secret_namespace, secret_type, processed_secrets)
+                    create_secret(api_instance, secret_name, secret_namespace, secret_type, processed_secrets, logger)
                 elif existing_secret.data != processed_secrets:
                     # Update the secret if the data has changed
                     api_instance.replace_namespaced_secret(
@@ -75,6 +75,7 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
     except Exception as e:
         logger.error(f"Unexpected error when handling PhaseSecret {name} in namespace {namespace}: {e}")
 
+
 def redeploy_affected_deployments(namespace, logger, api_instance):
     try:
         apps_v1_api = AppsV1Api(api_instance.api_client)
@@ -104,20 +105,25 @@ def patch_deployment_for_redeploy(deployment, namespace, apps_v1_api, logger):
     except ApiException as e:
         logger.error(f"Failed to patch deployment {deployment.metadata.name} in namespace {namespace}: {e}")
 
-def process_secrets(fetched_secrets, processors, secret_type):
+def process_secrets(fetched_secrets, processors, secret_type, name_transformer):
     processed_secrets = {}
     for key, value in fetched_secrets.items():
         processor_info = processors.get(key, {})
         processor_type = processor_info.get('type', 'plain')
-        as_name = processor_info.get('asName', key)
+        as_name = processor_info.get('asName', key)  # Use asName for mapping
 
-        if processor_type == 'plain':
-            processed_value = base64.b64encode(value.encode()).decode()
-        elif processor_type == 'base64':
+        # Check and process the value based on the processor type
+        if processor_type == 'base64':
+            # Assume value is already base64 encoded; do not re-encode
             processed_value = value
+        elif processor_type == 'plain':
+            # Base64 encode the value
+            processed_value = base64.b64encode(value.encode()).decode()
         else:
-            processed_value = value  # Default to the original value if no matching processor
+            # Default to plain processing if processor type is not recognized
+            processed_value = base64.b64encode(value.encode()).decode()
 
+        # Map the processed value to the asName
         processed_secrets[as_name] = processed_value
 
     return processed_secrets

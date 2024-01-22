@@ -1,6 +1,6 @@
 import os
 import requests
-from src.utils.misc import get_user_agent
+from utils.misc import get_user_agent
 from typing import List
 from typing import Dict
 

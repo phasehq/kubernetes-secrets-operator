@@ -1,5 +1,5 @@
 import pytest
-from src.utils.misc import tag_matches, normalize_tag
+from utils.misc import tag_matches, normalize_tag
 
 
 full_tag_names = {

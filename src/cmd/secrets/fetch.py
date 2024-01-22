@@ -1,5 +1,5 @@
 import sys
-from src.utils.phase_io import Phase
+from utils.phase_io import Phase
 
 def phase_secrets_fetch(phase_service_token=None, phase_service_host=None, env_name=None, phase_app=None, keys=None, tags=None):
     """

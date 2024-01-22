@@ -2,7 +2,7 @@ import requests
 from typing import Tuple
 from typing import List
 from dataclasses import dataclass
-from src.utils.network import (
+from utils.network import (
     fetch_phase_user,
     fetch_app_key,
     fetch_wrapped_key_share,
@@ -14,10 +14,10 @@ from src.utils.network import (
 from nacl.bindings import (
     crypto_kx_server_session_keys, 
 )
-from src.utils.crypto import CryptoUtils
-from src.utils.const import __ph_version__, pss_user_pattern, pss_service_pattern
-from src.utils.misc import phase_get_context, get_default_user_host, normalize_tag, tag_matches
-from src.utils.keyring import get_credentials
+from utils.crypto import CryptoUtils
+from utils.const import __ph_version__, pss_user_pattern, pss_service_pattern
+from utils.misc import phase_get_context, get_default_user_host, normalize_tag, tag_matches
+from utils.keyring import get_credentials
 
 @dataclass
 class AppSecret:

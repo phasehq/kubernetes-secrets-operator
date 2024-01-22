@@ -2,7 +2,7 @@ import pytest
 import base64
 import re
 import os
-from src.utils.crypto import CryptoUtils
+from utils.crypto import CryptoUtils
 from nacl.secret import SecretBox
 
 class TestCryptoUtils:

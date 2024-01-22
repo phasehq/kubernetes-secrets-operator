@@ -5,7 +5,7 @@ import subprocess
 import json
 from urllib.parse import urlparse
 from typing import Union, List
-from src.utils.const import __version__, PHASE_ENV_CONFIG, PHASE_CLOUD_API_HOST, PHASE_SECRETS_DIR, cross_env_pattern, local_ref_pattern
+from utils.const import __version__, PHASE_ENV_CONFIG, PHASE_CLOUD_API_HOST, PHASE_SECRETS_DIR, cross_env_pattern, local_ref_pattern
 
 
 def get_default_user_host() -> str:
@@ -218,3 +218,31 @@ def get_user_agent():
     user_agent_str = ' '.join(details)
     return user_agent_str
 
+
+def transform_name(secret_key, format):
+    """
+    Transforms a secret key from UPPER_SNAKE_CASE to the specified format.
+
+    Args:
+        secret_key (str): The secret key to transform.
+        format (str): The target format ('camel', 'upper-camel', 'lower-snake', 'tf-var', 'dotnet-env', 'lower-kebab').
+
+    Returns:
+        str: The transformed secret key.
+    """
+    words = secret_key.lower().split('_')
+    
+    if format == 'camel':
+        return words[0] + ''.join(word.capitalize() for word in words[1:])
+    elif format == 'upper-camel':
+        return ''.join(word.capitalize() for word in words)
+    elif format == 'lower-snake':
+        return '_'.join(words)
+    elif format == 'tf-var':
+        return 'TF_VAR_' + '_'.join(words)
+    elif format == 'dotnet-env':
+        return '__'.join(word.capitalize() for word in words)
+    elif format == 'lower-kebab':
+        return '-'.join(words)
+    else:
+        return secret_key  # Default: return the key as is if format is unknown

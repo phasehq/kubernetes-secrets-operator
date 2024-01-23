@@ -1,6 +1,6 @@
 # Phase Kubernetes Operator
 
-### Securely manage and sync environment variables with Phase in your Kubernetes cluster with End-to-End encryption.
+### Securely sync secrets and environment variables with Phase in your Kubernetes cluster.
 
 ```
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⠔⠋⣳⣖⠚⣲⢖⠙⠳⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -24,11 +24,12 @@
 ## Features
 
 - Automatically sync secrets to your Kubernetes cluster
+- End-to-End encryption
 - Automatically redeploy deployments when a secret is updated
 - Sync secrets based on environment (dev, staging, prod) and tags
 - Transform secrets via secret processors
 
-```fish
+```yaml
 metadata:
   annotations:
     secrets.phase.dev/redeploy: "true"

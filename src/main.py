@@ -14,12 +14,11 @@ from utils.misc import transform_name
 def sync_secrets(spec, name, namespace, logger, **kwargs):
     try:
         api_instance = CoreV1Api()
-
         managed_secret_references = spec.get('managedSecretReferences', [])
         phase_host = spec.get('phaseHost', 'https://console.phase.dev')
         phase_app = spec.get('phaseApp')
         phase_app_env = spec.get('phaseAppEnv', 'production')
-        phase_app_env_tag =  spec.get('phaseAppEnvTag')
+        phase_app_env_tag = spec.get('phaseAppEnvTag')
         service_token_secret_name = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretName', 'phase-service-token')
 
         api_response = api_instance.read_namespaced_secret(service_token_secret_name, namespace)
@@ -45,24 +44,10 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
 
             try:
                 existing_secret = api_instance.read_namespaced_secret(name=secret_name, namespace=secret_namespace)
-                if existing_secret.type != secret_type:
-                    # Delete and recreate the secret if the type has changed
+                if existing_secret.type != secret_type or existing_secret.data != processed_secrets:
                     api_instance.delete_namespaced_secret(name=secret_name, namespace=secret_namespace)
-                    logger.info(f"Deleted existing secret {secret_name} in namespace {secret_namespace} due to type change.")
                     create_secret(api_instance, secret_name, secret_namespace, secret_type, processed_secrets, logger)
-                elif existing_secret.data != processed_secrets:
-                    # Update the secret if the data has changed
-                    api_instance.replace_namespaced_secret(
-                        name=secret_name,
-                        namespace=secret_namespace,
-                        body=kubernetes.client.V1Secret(
-                            metadata=kubernetes.client.V1ObjectMeta(name=secret_name),
-                            type=secret_type,
-                            data=processed_secrets
-                        )
-                    )
-                    logger.info(f"Updated secret {secret_name} in namespace {secret_namespace}")
-                secret_changed = True
+                    secret_changed = True
             except ApiException as e:
                 if e.status == 404:
                     create_secret(api_instance, secret_name, secret_namespace, secret_type, processed_secrets, logger)
@@ -79,7 +64,6 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         logger.error(f"Failed to fetch secrets for PhaseSecret {name} in namespace {namespace}: {e}")
     except Exception as e:
         logger.error(f"Unexpected error when handling PhaseSecret {name} in namespace {namespace}: {e}")
-
 
 def redeploy_affected_deployments(namespace, logger, api_instance):
     try:
@@ -135,7 +119,7 @@ def process_secrets(fetched_secrets, processors, secret_type, name_transformer):
 
 def create_secret(api_instance, secret_name, secret_namespace, secret_type, secret_data, logger):
     try:
-        api_instance.create_namespaced_secret(
+        response = api_instance.create_namespaced_secret(
             namespace=secret_namespace,
             body=kubernetes.client.V1Secret(
                 metadata=kubernetes.client.V1ObjectMeta(name=secret_name),
@@ -143,7 +127,7 @@ def create_secret(api_instance, secret_name, secret_namespace, secret_type, secr
                 data=secret_data
             )
         )
-        logger.info(f"Created secret {secret_name} in namespace {secret_namespace}")
+        if response:
+            logger.info(f"Created secret {secret_name} in namespace {secret_namespace}")
     except ApiException as e:
         logger.error(f"Failed to create secret {secret_name} in namespace {secret_namespace}: {e}")
-

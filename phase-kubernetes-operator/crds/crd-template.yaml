@@ -29,6 +29,9 @@ spec:
               type: object
               description: PhaseSecretSpec defines the desired state of PhaseSecret
               properties:
+                phaseApp:
+                  description: The Phase application to fetch secrets from.
+                  type: string
                 phaseAppEnv:
                   description: The environment variable representing the app environment in Phase.
                   type: string
@@ -119,7 +122,7 @@ spec:
                   type: integer
                   default: 60
               required:
-                - phaseAppEnv
+                - phaseApp
                 - managedSecretReferences
                 - phaseHost
             status:

@@ -10,7 +10,7 @@ from utils.const import REDEPLOY_ANNOTATION
 from utils.misc import transform_name
 
 
-@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=60)
+@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=10)
 def sync_secrets(spec, name, namespace, logger, **kwargs):
     try:
         api_instance = CoreV1Api()
@@ -19,7 +19,7 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         phase_host = spec.get('phaseHost', 'https://console.phase.dev')
         phase_app = spec.get('phaseApp')
         phase_app_env = spec.get('phaseAppEnv', 'production')
-        phase_app_env_tag =  spec.get('phaseAppEnvTag', 'none')
+        phase_app_env_tag =  spec.get('phaseAppEnvTag')
         service_token_secret_name = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretName', 'phase-service-token')
 
         api_response = api_instance.read_namespaced_secret(service_token_secret_name, namespace)

@@ -141,7 +141,7 @@ kind create cluster
 3. Export kindconfig
 
 ```
-kind export kubeconfig
+kind get kubeconfig --name "kind" > ~/.kube/config
 ```
 
 Verify that the cluster is up:
@@ -174,11 +174,11 @@ kubectl create secret generic phase-service-token \
 6. Apply the CRD and CR respectively
 
 ```fish
-kubectl apply -f dev-cr.yaml
+kubectl apply -f dev-crd.yaml
 ```
 
 ```fish
-kubectl apply -f dev-crd.yaml
+kubectl apply -f dev-cr.yaml
 ```
 
 7. Start the operator via Kopf

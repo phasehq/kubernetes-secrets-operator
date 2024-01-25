@@ -56,7 +56,8 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
                     logger.error(f"Failed to update secret {secret_name} in namespace {secret_namespace}: {e}")
 
         if secret_changed:
-            redeploy_affected_deployments(namespace, logger, api_instance)
+            affected_secrets = [ref['secretName'] for ref in managed_secret_references]
+            redeploy_affected_deployments(namespace, affected_secrets, logger, api_instance)
 
         logger.info(f"Secrets for PhaseSecret {name} have been successfully updated in namespace {namespace}")
 
@@ -65,15 +66,31 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
     except Exception as e:
         logger.error(f"Unexpected error when handling PhaseSecret {name} in namespace {namespace}: {e}")
 
-def redeploy_affected_deployments(namespace, logger, api_instance):
+def redeploy_affected_deployments(namespace, affected_secrets, logger, api_instance):
     try:
         apps_v1_api = AppsV1Api(api_instance.api_client)
         deployments = apps_v1_api.list_namespaced_deployment(namespace)
         for deployment in deployments.items:
-            if deployment.metadata.annotations and REDEPLOY_ANNOTATION in deployment.metadata.annotations:
+            if should_redeploy(deployment, affected_secrets):
                 patch_deployment_for_redeploy(deployment, namespace, apps_v1_api, logger)
     except ApiException as e:
         logger.error(f"Error listing deployments in namespace {namespace}: {e}")
+
+def should_redeploy(deployment, affected_secrets):
+    if not (deployment.metadata.annotations and REDEPLOY_ANNOTATION in deployment.metadata.annotations):
+        return False
+
+    deployment_secrets = extract_deployment_secrets(deployment)
+    return any(secret in affected_secrets for secret in deployment_secrets)
+
+def extract_deployment_secrets(deployment):
+    secrets = []
+    for container in deployment.spec.template.spec.containers:
+        if container.env_from:
+            for env_from in container.env_from:
+                if env_from.secret_ref:
+                    secrets.append(env_from.secret_ref.name)
+    return secrets
 
 def patch_deployment_for_redeploy(deployment, namespace, apps_v1_api, logger):
     try:

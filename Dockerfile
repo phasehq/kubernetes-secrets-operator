@@ -5,7 +5,7 @@ FROM python:3.9.18-alpine3.18
 WORKDIR /app
 
 # Copy the necessary files
-COPY src/ /app/src/
+COPY src/* /app/
 COPY requirements.txt /app/
 
 # Install required Python packages

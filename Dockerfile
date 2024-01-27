@@ -5,11 +5,10 @@ FROM python:3.9.18-alpine3.18
 WORKDIR /app
 
 # Copy the necessary files
-COPY src/* /app/
-COPY requirements.txt /app/
+COPY src/ /app/
 
 # Install required Python packages
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Install Kopf
 RUN pip install kopf

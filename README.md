@@ -48,7 +48,7 @@ helm repo add phase https://helm.phase.dev && helm repo update
 Install the Phase Secrets Operator:
 
 ```fish
-helm install phase-secrets-operator phase/phase-kubernetes-operator --set image.tag=v0.1.0
+helm install phase-secrets-operator phase/phase-kubernetes-operator --set image.tag=v1.0.1
 ```
 
     It's best practice to specify the version in production environments to avoid

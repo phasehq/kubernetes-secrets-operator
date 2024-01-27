@@ -5,14 +5,11 @@ FROM python:3.9.18-alpine3.18
 WORKDIR /app
 
 # Copy the necessary files
-COPY src/ /app/src/
+COPY src/ /app/ 
 COPY requirements.txt /app/
 
 # Install required Python packages
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Install Kopf
-RUN pip install kopf
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Create a non-root user
 RUN adduser -D operator-usr

@@ -90,6 +90,7 @@ metadata:
   name: example-phase-secret
   namespace: default
 spec:
+  phaseApp: "the-name-of-your-phase-app" # The name of your Phase application
   phaseAppEnv: "prod" # OPTIONAL - The Phase application environment to fetch secrets from
   phaseHost: "https://console.phase.dev" # OPTIONAL - URL of the Phase Console instance
   authentication:

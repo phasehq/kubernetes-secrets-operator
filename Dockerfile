@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Copy the necessary files
 COPY src/ /app/src/
-COPY requirements.txt phase_kubernetes_operator.py /app/
+COPY requirements.txt /app/
 
 # Install required Python packages
 RUN pip install --no-cache-dir -r requirements.txt
@@ -19,4 +19,4 @@ RUN adduser -D operator-usr
 USER operator-usr
 
 # Run the operator script using Kopf
-CMD ["kopf", "run", "/app/phase_kubernetes_operator.py"]
+CMD ["kopf", "run", "/app/main.py"]

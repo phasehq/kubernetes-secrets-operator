@@ -1,227 +1,150 @@
-#!/bin/python
-import os
-import sys
-import traceback
-import argparse
-from argparse import RawTextHelpFormatter
-from src.cmd.open_console import phase_open_web
-from src.cmd.update import phase_cli_update
-from src.cmd.users.whoami import phase_users_whoami
-from src.cmd.users.keyring import show_keyring_info
-from src.cmd.users.logout import phase_cli_logout
-from src.cmd.run import phase_run_inject
-from src.cmd.init import phase_init
-from src.cmd.auth import phase_auth
-from src.cmd.secrets.list import phase_list_secrets
-from src.cmd.secrets.get import phase_secrets_get
-from src.cmd.secrets.export import phase_secrets_env_export
-from src.cmd.secrets.import_env import phase_secrets_env_import
-from src.cmd.secrets.delete import phase_secrets_delete
-from src.cmd.secrets.create import phase_secrets_create
-from src.cmd.secrets.update import phase_secrets_update
-
-from src.utils.const import __version__
-from src.utils.const import phaseASCii, description
+import kopf
+import base64
+import datetime
+import kubernetes.client
+from kubernetes.client.rest import ApiException
+from kubernetes.client import AppsV1Api
+from kubernetes.client import CoreV1Api
+from cmd.secrets.fetch import phase_secrets_fetch
+from utils.const import REDEPLOY_ANNOTATION
+from utils.misc import transform_name
 
 
-def print_phase_cli_version():
-    print(f"Version: {__version__}")
-
-def print_phase_cli_version_only():
-    print(f"{__version__}")
-
-PHASE_DEBUG = os.environ.get('PHASE_DEBUG', 'False').lower() == 'true'
-
-class CustomHelpFormatter(argparse.HelpFormatter):
-    def __init__(self, prog):
-        super().__init__(prog, max_help_position=15, width=sys.maxsize) # set the alignment and wrapping width
-
-    def add_usage(self, usage, actions, groups, prefix=None):
-        # Override to prevent the default behavior
-        return 
-
-    def _format_action(self, action):
-        # If the action type is subparsers, skip its formatting
-        if isinstance(action, argparse._SubParsersAction):
-            # Filter out the metavar option
-            action.metavar = None
-        parts = super(CustomHelpFormatter, self)._format_action(action)
-        # remove the unnecessary line
-        if "{auth,init,run,secrets,users,console,update}" in parts:
-            parts = parts.replace("{auth,init,run,secrets,users,console,update}", "")
-        return parts
-
-class HelpfulParser(argparse.ArgumentParser):
-    def __init__(self, *args, **kwargs):
-        kwargs['formatter_class'] = CustomHelpFormatter
-        super().__init__(*args, **kwargs)
-        
-    def error(self, message):
-        print (description)
-        print(phaseASCii)
-        self.print_help()
-        sys.exit(2)
-
-    def add_subparsers(self, **kwargs):
-        kwargs['title'] = 'Commands'
-        return super(HelpfulParser, self).add_subparsers(**kwargs)
-
-def main ():
-    env_help = "Environment name eg. dev, staging, production"
-
+@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=60)
+def sync_secrets(spec, name, namespace, logger, **kwargs):
     try:
-        parser = HelpfulParser(prog='phase-cli', formatter_class=RawTextHelpFormatter)
-        parser.add_argument('--version', '-v', action='version', version=__version__)
-        
-        # Create subparsers with title 'Available Commands:'
-        subparsers = parser.add_subparsers(dest='command', required=True)
+        api_instance = CoreV1Api()
+        managed_secret_references = spec.get('managedSecretReferences', [])
+        phase_host = spec.get('phaseHost', 'https://console.phase.dev')
+        phase_app = spec.get('phaseApp')
+        phase_app_env = spec.get('phaseAppEnv', 'production')
+        phase_app_env_tag = spec.get('phaseAppEnvTag')
+        service_token_secret_name = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretName', 'phase-service-token')
 
-        # Auth command
-        auth_parser = subparsers.add_parser('auth', help='💻 Authenticate with Phase')
-        auth_parser.add_argument('--mode', choices=['token', 'webauth'], default='webauth', help='Mode of authentication. Default: webauth')
+        api_response = api_instance.read_namespaced_secret(service_token_secret_name, namespace)
+        service_token = base64.b64decode(api_response.data['token']).decode('utf-8')
 
-        # Init command
-        init_parser = subparsers.add_parser('init', help='🔗 Link your project with your Phase app')
-
-        # Run command
-        run_parser = subparsers.add_parser('run', help='🚀 Run and inject secrets to your app')
-        run_parser.add_argument('command_to_run', nargs=argparse.REMAINDER, help='Command to be run. Ex. phase run yarn dev')
-        run_parser.add_argument('--env', type=str, help=env_help)
-
-        # Secrets command
-        secrets_parser = subparsers.add_parser('secrets', help='🗝️` Manage your secrets')
-        secrets_subparsers = secrets_parser.add_subparsers(dest='secrets_command', required=True)
-
-        # Secrets list command
-        secrets_list_parser = secrets_subparsers.add_parser('list', help='📇 List all the secrets')
-        secrets_list_parser.add_argument('--show', action='store_true', help='Return secrets uncensored')
-        secrets_list_parser.add_argument('--env', type=str, help=env_help)
-        secrets_list_parser.epilog = (
-            "🔗 : Indicates that the secret value references another secret within the same environment.\n"
-            "⛓️` : Indicates a cross-environment reference, where a secret in the current environment references a secret from another environment."
+        phase_secrets_dict = phase_secrets_fetch(
+            phase_service_token=service_token,
+            phase_service_host=phase_host,
+            phase_app=phase_app,
+            env_name=phase_app_env,
+            tags=phase_app_env_tag
         )
 
-        # Secrets get command
-        secrets_get_parser = secrets_subparsers.add_parser('get', help='🔍 Get a specific secret by key')
-        secrets_get_parser.add_argument('key', type=str, help='The key associated with the secret to fetch')
-        secrets_get_parser.add_argument('--env', type=str, help=env_help)
+        secret_changed = False
+        for secret_reference in managed_secret_references:
+            secret_name = secret_reference['secretName']
+            secret_namespace = secret_reference.get('secretNamespace', namespace)
+            secret_type = secret_reference.get('secretType', 'Opaque')
+            name_transformer = secret_reference.get('nameTransformer', 'upper_snake')
+            processors = secret_reference.get('processors', {})
 
-        # Secrets create command
-        secrets_create_parser = secrets_subparsers.add_parser(
-            'create', 
-            description='💳 Create a new secret. Optionally, you can provide the secret value via stdin.\n\nExample:\n  cat ~/.ssh/id_rsa | phase secrets create SSH_PRIVATE_KEY',
-            help='💳 Create a new secret'
-        )
-        secrets_create_parser.add_argument(
-            'key', 
-            type=str, 
-            nargs='?', 
-            help='The key for the secret to be created. (Will be converted to uppercase.) If the value is not provided as an argument, it will be read from stdin.'
-        )
-        secrets_create_parser.add_argument('--env', type=str, help=env_help)
+            processed_secrets = process_secrets(phase_secrets_dict, processors, secret_type, name_transformer)
 
-        # Secrets update command
-        secrets_update_parser = secrets_subparsers.add_parser(
-            'update', 
-            description='📝 Update an existing secret. Optionally, you can provide the new secret value via stdin.\n\nExample:\n  cat ~/.ssh/id_ed25519 | phase secrets update SSH_PRIVATE_KEY',
-            help='📝 Update an existing secret'
-        )
-        secrets_update_parser.add_argument(
-            'key', 
-            type=str, 
-            help='The key associated with the secret to update. If the new value is not provided as an argument, it will be read from stdin.'
-        )
-        secrets_update_parser.add_argument('--env', type=str, help=env_help)
+            try:
+                existing_secret = api_instance.read_namespaced_secret(name=secret_name, namespace=secret_namespace)
+                if existing_secret.type != secret_type or existing_secret.data != processed_secrets:
+                    api_instance.delete_namespaced_secret(name=secret_name, namespace=secret_namespace)
+                    create_secret(api_instance, secret_name, secret_namespace, secret_type, processed_secrets, logger)
+                    secret_changed = True
+            except ApiException as e:
+                if e.status == 404:
+                    create_secret(api_instance, secret_name, secret_namespace, secret_type, processed_secrets, logger)
+                    secret_changed = True
+                else:
+                    logger.error(f"Failed to update secret {secret_name} in namespace {secret_namespace}: {e}")
 
-        # Secrets delete command
-        secrets_delete_parser = secrets_subparsers.add_parser('delete', help='🗑️` Delete a secret')
-        secrets_delete_parser.add_argument('keys', nargs='*', help='Keys to be deleted')
-        secrets_delete_parser.add_argument('--env', type=str, help=env_help)
+        if secret_changed:
+            affected_secrets = [ref['secretName'] for ref in managed_secret_references]
+            redeploy_affected_deployments(namespace, affected_secrets, logger, api_instance)
 
-        # Secrets import command
-        secrets_import_parser = secrets_subparsers.add_parser('import', help='📩 Import secrets from a .env file')
-        secrets_import_parser.add_argument('env_file', type=str, help='The .env file to import')
-        secrets_import_parser.add_argument('--env', type=str, help=env_help)
+        logger.info(f"Secrets for PhaseSecret {name} have been successfully updated in namespace {namespace}")
 
-        # Secrets export command
-        secrets_export_parser = secrets_subparsers.add_parser('export', help='🥡 Export secrets in a dotenv format')
-        secrets_export_parser.add_argument('keys', nargs='*', help='List of keys separated by space', default=None)
-        secrets_export_parser.add_argument('--env', type=str, help=env_help)
-
-        # Users command
-        users_parser = subparsers.add_parser('users', help='👥 Manage users and accounts')
-        users_subparsers = users_parser.add_subparsers(dest='users_command', required=True)
-
-        # Users whoami command
-        whoami_parser = users_subparsers.add_parser('whoami', help='🙋 See details of the current user')
-
-        # Users logout command
-        logout_parser = users_subparsers.add_parser('logout', help='🏃 Logout from phase-cli')
-        logout_parser.add_argument('--purge', action='store_true', help='Purge all local data')
-
-        # Users keyring command
-        keyring_parser = users_subparsers.add_parser('keyring', help='🔐 Display information about the Phase keyring')
-
-        # Web command
-        web_parser = subparsers.add_parser('console', help='🖥️` Open the Phase Console in your browser')
-
-        # Check if the operating system is Linux before adding the update command
-        if sys.platform == "linux":
-            update_parser = subparsers.add_parser('update', help='🆙 Update the Phase CLI to the latest version')
-
-        args = parser.parse_args()
-
-        if args.command == 'auth':
-            phase_auth(args.mode)
-            sys.exit(0)
-        elif args.command == 'init':
-            phase_init()
-        elif args.command == 'run':
-            command = ' '.join(args.command_to_run)
-            phase_run_inject(command, env_name=args.env)
-        elif args.command == 'console':
-            phase_open_web()
-        elif args.command == 'update':
-            phase_cli_update()
-            sys.exit(0)
-        elif args.command == 'users':
-            if args.users_command == 'whoami':
-                phase_users_whoami()
-            elif args.users_command == 'logout':
-                phase_cli_logout(args.purge)
-            elif args.users_command == 'keyring':
-                show_keyring_info()
-            else:
-                print("Unknown users sub-command: " + args.users_command)
-                parser.print_help()
-                sys.exit(1)
-        elif args.command == 'secrets':
-            if args.secrets_command == 'list':
-                phase_list_secrets(args.show, env_name=args.env)
-            elif args.secrets_command == 'get':
-                phase_secrets_get(args.key, env_name=args.env)  
-            elif args.secrets_command == 'create':
-                phase_secrets_create(args.key, env_name=args.env)
-            elif args.secrets_command == 'delete':
-                phase_secrets_delete(args.keys, env_name=args.env)  
-            elif args.secrets_command == 'import':
-                phase_secrets_env_import(args.env_file, env_name=args.env)
-            elif args.secrets_command == 'export':
-                phase_secrets_env_export(env_name=args.env, keys=args.keys)
-            elif args.secrets_command == 'update':
-                phase_secrets_update(args.key, env_name=args.env)
-            else:
-                print("Unknown secrets sub-command: " + args.secrets_command)
-                parser.print_help()
-                sys.exit(1)
-    except KeyboardInterrupt:
-        print("\nStopping Phase.")
-        sys.exit(0)
-        
+    except ApiException as e:
+        logger.error(f"Failed to fetch secrets for PhaseSecret {name} in namespace {namespace}: {e}")
     except Exception as e:
-        # Always print the full traceback, regardless of PHASE_DEBUG
-        traceback.print_exc()
-        sys.exit(1)
+        logger.error(f"Unexpected error when handling PhaseSecret {name} in namespace {namespace}: {e}")
 
-if __name__ == '__main__':
-    main()
+def redeploy_affected_deployments(namespace, affected_secrets, logger, api_instance):
+    try:
+        apps_v1_api = AppsV1Api(api_instance.api_client)
+        deployments = apps_v1_api.list_namespaced_deployment(namespace)
+        for deployment in deployments.items:
+            if should_redeploy(deployment, affected_secrets):
+                patch_deployment_for_redeploy(deployment, namespace, apps_v1_api, logger)
+    except ApiException as e:
+        logger.error(f"Error listing deployments in namespace {namespace}: {e}")
+
+def should_redeploy(deployment, affected_secrets):
+    if not (deployment.metadata.annotations and REDEPLOY_ANNOTATION in deployment.metadata.annotations):
+        return False
+
+    deployment_secrets = extract_deployment_secrets(deployment)
+    return any(secret in affected_secrets for secret in deployment_secrets)
+
+def extract_deployment_secrets(deployment):
+    secrets = []
+    for container in deployment.spec.template.spec.containers:
+        if container.env_from:
+            for env_from in container.env_from:
+                if env_from.secret_ref:
+                    secrets.append(env_from.secret_ref.name)
+    return secrets
+
+def patch_deployment_for_redeploy(deployment, namespace, apps_v1_api, logger):
+    try:
+        timestamp = datetime.datetime.utcnow().isoformat()
+        patch_body = {
+            "spec": {
+                "template": {
+                    "metadata": {
+                        "annotations": {
+                            "phase.autoredeploy.timestamp": timestamp
+                        }
+                    }
+                }
+            }
+        }
+        apps_v1_api.patch_namespaced_deployment(name=deployment.metadata.name, namespace=namespace, body=patch_body)
+        logger.info(f"Triggered redeployment of {deployment.metadata.name} in namespace {namespace}")
+    except ApiException as e:
+        logger.error(f"Failed to patch deployment {deployment.metadata.name} in namespace {namespace}: {e}")
+
+def process_secrets(fetched_secrets, processors, secret_type, name_transformer):
+    processed_secrets = {}
+    for key, value in fetched_secrets.items():
+        processor_info = processors.get(key, {})
+        processor_type = processor_info.get('type', 'plain')
+        as_name = processor_info.get('asName', key)  # Use asName for mapping
+
+        # Check and process the value based on the processor type
+        if processor_type == 'base64':
+            # Assume value is already base64 encoded; do not re-encode
+            processed_value = value
+        elif processor_type == 'plain':
+            # Base64 encode the value
+            processed_value = base64.b64encode(value.encode()).decode()
+        else:
+            # Default to plain processing if processor type is not recognized
+            processed_value = base64.b64encode(value.encode()).decode()
+
+        # Map the processed value to the asName
+        processed_secrets[as_name] = processed_value
+
+    return processed_secrets
+
+def create_secret(api_instance, secret_name, secret_namespace, secret_type, secret_data, logger):
+    try:
+        response = api_instance.create_namespaced_secret(
+            namespace=secret_namespace,
+            body=kubernetes.client.V1Secret(
+                metadata=kubernetes.client.V1ObjectMeta(name=secret_name),
+                type=secret_type,
+                data=secret_data
+            )
+        )
+        if response:
+            logger.info(f"Created secret {secret_name} in namespace {secret_namespace}")
+    except ApiException as e:
+        logger.error(f"Failed to create secret {secret_name} in namespace {secret_namespace}: {e}")

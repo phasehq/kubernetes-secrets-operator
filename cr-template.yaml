@@ -4,7 +4,9 @@ metadata:
   name: example-phase-secret
   namespace: default
 spec:
-  phaseAppEnv: "prod" # OPTIONAL - The Phase application environment to fetch secrets from
+  phaseApp: "your-phase-application" # The name of your Phase application
+  phaseAppEnv: "production" # OPTIONAL The Phase application environment to fetch secrets from
+  phaseAppEnvTag: "certs" # OPTIONAL Tag for filtering secrets in the specified Phase app environment.
   phaseHost: "https://console.phase.dev" # OPTIONAL - URL of a Phase Console instance
   authentication:
     serviceToken:
@@ -12,5 +14,5 @@ spec:
         secretName: "phase-service-token" # Name of the Phase service token with access to your application
         secretNamespace: "default"
   managedSecretReferences: # Managed secrets in Kubernetes that Phase will sync secrets with
-    - secretName: "my-application-secret" # Name of the managed secret in Kubernetes that will be consumed by your application 
+    - secretName: "my-application-secret" # Name of the managed secret in Kubernetes that will be consumed by your application
       secretNamespace: "default"

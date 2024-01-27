@@ -1,6 +1,6 @@
 import os
 import requests
-from src.utils.misc import get_user_agent
+from utils.misc import get_user_agent
 from typing import List
 from typing import Dict
 
@@ -28,8 +28,9 @@ def handle_request_errors(response: requests.Response) -> None:
         return
     
     if response.status_code != 200:
-        # Always include the response text in the error message
-        error_message = f"🗿 Request failed with status code {response.status_code}: {response.text}"
+        error_message = f"🗿 Request failed with status code {response.status_code}"
+        if PHASE_DEBUG:
+            error_message += f": {response.text}"
         raise Exception(error_message)
 
 
@@ -40,8 +41,9 @@ def handle_connection_error(e: Exception) -> None:
     Args:
         e (Exception): The exception to handle.
     """
-    # Always include exception details in the error message
-    error_message = f"🗿 Network error: Please check your internet connection. Detail: {str(e)}"
+    error_message = "🗿 Network error: Please check your internet connection."
+    if PHASE_DEBUG:
+        error_message += f" Detail: {str(e)}"
     raise Exception(error_message)
 
 
@@ -52,8 +54,9 @@ def handle_ssl_error(e: Exception) -> None:
     Args:
         e (Exception): The exception to handle.
     """
-    # Always include exception details in the error message
-    error_message = f"🗿 SSL error: The Phase Console is using an invalid/expired or a self-signed certificate. Detail: {str(e)}"
+    error_message = "🗿 SSL error: The Phase Console is using an invalid/expired or a self-signed certificate."
+    if PHASE_DEBUG:
+        error_message += f" Detail: {str(e)}"
     raise Exception(error_message)
 
 

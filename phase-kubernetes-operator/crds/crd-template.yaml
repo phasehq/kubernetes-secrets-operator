@@ -82,6 +82,7 @@ spec:
                       secretType:
                         description: The type of the Kubernetes Secret.
                         type: string
+                        default: "Opaque"
                         enum:
                           - "Opaque"
                           - "kubernetes.io/tls"

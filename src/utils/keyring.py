@@ -1,7 +1,6 @@
 import os
 import sys
 import getpass
-import keyring
 from utils.misc import get_default_user_id
 
 def get_credentials():

@@ -10,7 +10,7 @@ from utils.const import REDEPLOY_ANNOTATION
 from utils.misc import transform_name
 
 
-@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=10)
+@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=60)
 def sync_secrets(spec, name, namespace, logger, **kwargs):
     try:
         api_instance = CoreV1Api()

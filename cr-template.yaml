@@ -6,7 +6,6 @@ metadata:
 spec:
   phaseApp: "your-phase-application" # The name of your Phase application
   phaseAppEnv: "production" # OPTIONAL The Phase application environment to fetch secrets from
-  phaseAppEnvTag: "certs" # OPTIONAL Tag for filtering secrets in the specified Phase app environment.
   phaseHost: "https://console.phase.dev" # OPTIONAL - URL of a Phase Console instance
   authentication:
     serviceToken:

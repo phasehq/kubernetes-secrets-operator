@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: helloworld-deployment
+  annotations:
+    secrets.phase.dev/redeploy: "true"
 spec:
   selector:
     matchLabels:
@@ -13,10 +15,10 @@ spec:
         app: helloworld
     spec:
       containers:
-      - name: helloworld
-        image: nginx
-        ports:
-        - containerPort: 80
-        envFrom:
-        - secretRef:
-            name: phase-secerts-example
+        - name: helloworld
+          image: nginx
+          ports:
+            - containerPort: 80
+          envFrom:
+            - secretRef:
+                name: my-application-secret

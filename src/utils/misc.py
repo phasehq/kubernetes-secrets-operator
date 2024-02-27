@@ -127,13 +127,13 @@ def phase_get_context(user_data, app_name=None, env_name=None):
             if not application:
                 raise ValueError(f"No application found with the ID '{app_id}'.")
         else:
-            raise ValueError("🤔 No application context provided. Please run 'phase init' or pass the '--app' flag followed by your application name.")
+            raise ValueError("🤔 No application context provided. Please specify the 'phaseApp' field in your Kubernetes Custom Resource spec.")
 
         # 4. Attempt to match environment with the exact name or a name that contains the env_name string
         environment = next((env for env in application["environment_keys"] if env_name.lower() in env["environment"]["name"].lower()), None)
 
         if not environment:
-            raise EnvironmentNotFoundException(env_name)
+            raise ValueError(f"⚠️  Warning: The environment '{env_name}' either does not exist or you do not have access to it.")
 
         # Return application name, application ID, environment name, environment ID, and public key
         return (application["name"], application["id"], environment["environment"]["name"], environment["environment"]["id"], environment["identity_key"])

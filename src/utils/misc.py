@@ -86,7 +86,7 @@ def get_default_user_id(all_ids=False) -> Union[str, List[str]]:
 
 def phase_get_context(user_data, app_name=None, env_name=None):
     """
-    Get the context (ID and publicKey) for a specified application and environment or the default application and environment.
+    Get the context (ID, name, and publicKey) for a specified application and environment or the default application and environment.
 
     Parameters:
     - user_data (dict): The user data from the API response.
@@ -94,7 +94,7 @@ def phase_get_context(user_data, app_name=None, env_name=None):
     - env_name (str, optional): The name (or partial name) of the desired environment.
 
     Returns:
-    - tuple: A tuple containing the application's ID, environment's ID, and publicKey.
+    - tuple: A tuple containing the application's name, application's ID, environment's name, environment's ID, and publicKey.
 
     Raises:
     - ValueError: If no matching application or environment is found.
@@ -133,10 +133,10 @@ def phase_get_context(user_data, app_name=None, env_name=None):
         environment = next((env for env in application["environment_keys"] if env_name.lower() in env["environment"]["name"].lower()), None)
 
         if not environment:
-            raise ValueError(f"⚠️  Warning: The environment '{env_name}' either does not exist or you do not have access to it.")
+            raise EnvironmentNotFoundException(env_name)
 
-        return application["id"], environment["environment"]["id"], environment["identity_key"]
-    
+        # Return application name, application ID, environment name, environment ID, and public key
+        return (application["name"], application["id"], environment["environment"]["name"], environment["environment"]["id"], environment["identity_key"])
     except StopIteration:
         raise ValueError("🔍 Application or environment not found.")
 

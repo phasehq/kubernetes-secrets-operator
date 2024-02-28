@@ -1,6 +1,6 @@
 apiVersion: v2
 name: phase-kubernetes-operator
-icon: https://phase.dev/android-chrome-512x512.png
+icon: https://phase.dev/apple-touch-icon.png
 description: A Helm chart for deploying the Phase Kubernetes Operator
 type: application
 

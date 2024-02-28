@@ -1,7 +1,11 @@
-from utils.phase_io import Phase
 import sys
+import logging
+from utils.phase_io import Phase
 from utils.secret_referencing import resolve_all_secrets
 
+# Configure logging
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
 
 def phase_secrets_fetch(phase_service_token=None, phase_service_host=None, env_name=None, phase_app=None, keys=None, tags=None, path='/'):
     """
@@ -20,7 +24,7 @@ def phase_secrets_fetch(phase_service_token=None, phase_service_host=None, env_n
                 current_application_name = secret['application']
 
                 # Attempt to resolve secret references in the value
-                resolved_value = resolve_all_secrets(value=secret["value"], current_application_name=current_application_name, current_env_name=current_env_name, phase=phase)
+                resolved_value = resolve_all_secrets(value=secret["value"], all_secrets=all_secrets, current_application_name=current_application_name, current_env_name=current_env_name, phase=phase)
                 resolved_secrets.append({
                     **secret,
                     "value": resolved_value  # Replace original value with resolved value

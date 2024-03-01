@@ -28,7 +28,7 @@
 - Automatically sync secrets to your Kubernetes cluster
 - End-to-End encryption
 - Automatically redeploy deployments when a secret is updated
-- Sync secrets based on environment (dev, staging, prod) and tags
+- Sync secrets based on environment (dev, staging, prod), folders and tags
 - Transform secrets via secret processors
 
 ```yaml

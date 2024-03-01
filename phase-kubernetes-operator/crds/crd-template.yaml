@@ -36,6 +36,10 @@ spec:
                   description: The environment variable representing the app environment in Phase.
                   type: string
                   default: "production"
+                phaseAppEnvPath:
+                  description: Path within the Phase application environment to fetch secrets from.
+                  type: string
+                  default: "/"
                 phaseAppEnvTag:
                   description: Tag for filtering secrets in the specified Phase app environment.
                   type: string

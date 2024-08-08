@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phase.fullname" . }}-config
+data:
+  HOST: {{ .Values.global.host | quote }}
+  HTTP_PROTOCOL: {{ .Values.global.httpProtocol | quote }}
+  SSO_PROVIDERS: {{ .Values.sso.providers | quote }}
+  DATABASE_HOST: {{ .Values.database.host | quote }}
+  DATABASE_PORT: {{ .Values.database.port | quote }}
+  DATABASE_NAME: {{ .Values.database.name | quote }}
+  DATABASE_USER: {{ .Values.database.user | quote }}
+  REDIS_HOST: {{ .Values.redis.host | quote }}
+  REDIS_PORT: {{ .Values.redis.port | quote }}
+  NEXT_TELEMETRY_DISABLED: "1"

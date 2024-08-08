@@ -1,0 +1,138 @@
+# Global settings
+global:
+  host: "localhost"
+  httpProtocol: "https://"
+
+frontend:
+  image:
+    repository: phasehq/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 3000
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 5
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+backend:
+  image:
+    repository: phasehq/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8000
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 5
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+worker:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+database:
+  host: "phase-postgres"
+  port: "5432"
+  name: "postgres-db-name"
+  user: "postgres-user"
+  image:
+    repository: postgres
+    tag: 15.4-alpine3.17
+    pullPolicy: IfNotPresent
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: "" # Use the default StorageClass
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+redis:
+  host: "phase-redis"
+  port: "6379"
+  image:
+    repository: redis
+    tag: alpine3.19
+    pullPolicy: IfNotPresent
+  service:
+    port: 6379
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# SSO settings
+sso:
+  providers: "google,github,gitlab"
+
+# Secrets (DO NOT use these in production, generate your own secure values)
+secrets:
+  nextauthSecret: "82031b3760ac58352bb2d48fd9f32e9f72a0614343b669038139f18652ed1447"
+  secretKey: "92d44efc4f9a4c0556cc67d2d033d3217829c263d5ab7d1954cf4b5bfd533e58"
+  serverSecret: "9e760539415af07b22249b5878593bd4deb9b8961c7dd0570117549f2f32a2"
+  databasePassword: "a765b221799be364c53c8a32acccf5dd90d5fc832607bdd14fccaaaa0062adfd"
+  googleClientId: ""
+  googleClientSecret: ""
+  githubClientId: ""
+  githubClientSecret: ""
+  gitlabClientId: ""
+  gitlabClientSecret: ""
+
+# Ingress settings
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Autoscaling settings
+autoscaling:
+  frontend:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+  backend:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+  worker:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80

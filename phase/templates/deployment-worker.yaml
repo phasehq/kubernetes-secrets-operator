@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "phase.fullname" . }}-worker
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "phase.selectorLabels" . | nindent 6 }}
+      app: worker
+  template:
+    metadata:
+      labels:
+        {{- include "phase.selectorLabels" . | nindent 8 }}
+        app: worker
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox
+        command: ['sh', '-c', 'until nc -z $DATABASE_HOST $DATABASE_PORT; do echo waiting for postgres; sleep 2; done;']
+        envFrom:
+        - configMapRef:
+            name: {{ include "phase.fullname" . }}-config
+      - name: wait-for-redis
+        image: busybox
+        command: ['sh', '-c', 'until nc -z $REDIS_HOST $REDIS_PORT; do echo waiting for redis; sleep 2; done;']
+        envFrom:
+        - configMapRef:
+            name: {{ include "phase.fullname" . }}-config
+      containers:
+      - name: worker
+        image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+        imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+        command: ["python", "manage.py", "rqworker", "default"]
+        envFrom:
+        - configMapRef:
+            name: {{ include "phase.fullname" . }}-config
+        - secretRef:
+            name: {{ include "phase.fullname" . }}-secrets
+        env:
+        - name: ALLOWED_HOSTS
+          value: "$(HOST),{{ include "phase.fullname" . }}-worker"
+        - name: ALLOWED_ORIGINS
+          value: "$(HTTP_PROTOCOL)$(HOST)"
+        - name: SESSION_COOKIE_DOMAIN
+          value: "$(HOST)"

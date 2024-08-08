@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "phase.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.worker.replicaCount }}
+  replicas: {{ .Values.app.worker.replicaCount }}
   selector:
     matchLabels:
       {{- include "phase.selectorLabels" . | nindent 6 }}
@@ -31,8 +31,8 @@ spec:
             name: {{ include "phase.fullname" . }}-config
       containers:
       - name: worker
-        image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
-        imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+        image: "{{ .Values.app.worker.image.repository }}:{{ .Values.app.worker.image.tag }}"
+        imagePullPolicy: {{ .Values.app.worker.image.pullPolicy }}
         command: ["python", "manage.py", "rqworker", "default"]
         envFrom:
         - configMapRef:
@@ -46,3 +46,5 @@ spec:
           value: "$(HTTP_PROTOCOL)$(HOST)"
         - name: SESSION_COOKIE_DOMAIN
           value: "$(HOST)"
+        resources:
+          {{- toYaml .Values.app.worker.resources | nindent 12 }}

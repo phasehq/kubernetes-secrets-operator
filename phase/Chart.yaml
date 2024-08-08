@@ -1,0 +1,16 @@
+apiVersion: v2
+name: phase
+icon: https://phase.dev/apple-touch-icon.png
+description: A Helm chart for deploying the Phase Secrets Manager 
+type: application
+version: 0.1.0
+appVersion: "v2.29.7"
+keywords:
+  - phase
+  - deployment
+home: https://github.com/phasehq/kubernetes-secrets-operator
+sources:
+  - https://github.com/phasehq/console
+maintainers:
+  - name: Nimish
+    email: nimish@phase.dev

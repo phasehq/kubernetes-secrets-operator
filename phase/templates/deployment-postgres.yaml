@@ -1,3 +1,4 @@
+{{- if not .Values.global.external.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -80,7 +81,7 @@ spec:
         {{- end }}
 
 ---
-{{- if .Values.database.persistence.enabled }}
+{{- if and (not .Values.global.external.enabled) .Values.database.persistence.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -96,4 +97,5 @@ spec:
   {{- if .Values.database.persistence.storageClass }}
   storageClassName: {{ .Values.database.persistence.storageClass }}
   {{- end }}
+{{- end }}
 {{- end }}

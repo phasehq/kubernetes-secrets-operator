@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "phase.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.frontend.replicaCount }}
+  replicas: {{ .Values.app.frontend.replicaCount }}
   selector:
     matchLabels:
       {{- include "phase.selectorLabels" . | nindent 6 }}
@@ -18,8 +18,8 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
-        imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+        image: "{{ .Values.app.frontend.image.repository }}:{{ .Values.app.frontend.image.tag }}"
+        imagePullPolicy: {{ .Values.app.frontend.image.pullPolicy }}
         ports:
         - containerPort: 3000
         envFrom:
@@ -36,11 +36,13 @@ spec:
           value: "$(HTTP_PROTOCOL)$(HOST)/service"
         - name: NEXT_PUBLIC_NEXTAUTH_PROVIDERS
           value: "$(SSO_PROVIDERS)"
-        {{- if .Values.frontend.readinessProbe.enabled }}
+        {{- if .Values.app.frontend.readinessProbe.enabled }}
         readinessProbe:
           httpGet:
             path: /api/health
             port: 3000
-          initialDelaySeconds: {{ .Values.frontend.readinessProbe.initialDelaySeconds }}
-          periodSeconds: {{ .Values.frontend.readinessProbe.periodSeconds }}
+          initialDelaySeconds: {{ .Values.app.frontend.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.app.frontend.readinessProbe.periodSeconds }}
         {{- end }}
+        resources:
+          {{- toYaml .Values.app.frontend.resources | nindent 12 }}

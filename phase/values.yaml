@@ -2,57 +2,69 @@
 global:
   host: "localhost"
   httpProtocol: "https://"
+  version: "latest"
+  external:
+    enabled: false  # Set to true to use external managed services
 
-frontend:
-  image:
-    repository: phasehq/frontend
-    tag: latest
-    pullPolicy: IfNotPresent
-  replicaCount: 1
-  service:
-    type: ClusterIP
-    port: 3000
-  readinessProbe:
-    enabled: true
-    initialDelaySeconds: 10
-    periodSeconds: 5
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
+config:
+  nextTelemetryDisabled: "1"
 
-backend:
-  image:
-    repository: phasehq/backend
-    tag: latest
-    pullPolicy: IfNotPresent
-  replicaCount: 1
-  service:
-    type: ClusterIP
-    port: 8000
-  readinessProbe:
-    enabled: true
-    initialDelaySeconds: 10
-    periodSeconds: 5
-    timeoutSeconds: 5
-  livenessProbe:
-    enabled: true
-    initialDelaySeconds: 15
-    periodSeconds: 20
-    timeoutSeconds: 5
-  resources:
-    requests:
-      cpu: 500m
-      memory: 1Gi
+app:
+  frontend:
+    image:
+      repository: phasehq/frontend
+      tag: "{{ .Values.global.version }}"
+      pullPolicy: IfNotPresent
+    replicaCount: 1
+    service:
+      type: ClusterIP
+      port: 3000
+    readinessProbe:
+      enabled: true
+      initialDelaySeconds: 10
+      periodSeconds: 5
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
 
-worker:
-  replicaCount: 1
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
+  backend:
+    image:
+      repository: phasehq/backend
+      tag: "{{ .Values.global.version }}"
+      pullPolicy: IfNotPresent
+    replicaCount: 1
+    service:
+      type: ClusterIP
+      port: 8000
+    readinessProbe:
+      enabled: true
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 5
+    livenessProbe:
+      enabled: true
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 5
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+
+  worker:
+    image:
+      repository: phasehq/backend
+      tag: "{{ .Values.global.version }}"
+      pullPolicy: IfNotPresent
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
 
 database:
+  external: "{{ .Values.global.external.enabled }}"
   host: "phase-postgres"
   port: "5432"
   name: "postgres-db-name"
@@ -66,14 +78,16 @@ database:
   persistence:
     enabled: true
     size: 50Gi
-    storageClass: "" # Use the default StorageClass
+    storageClass: ""
     accessMode: ReadWriteOnce
   resources:
     requests:
       cpu: 500m
       memory: 1Gi
 
+# Redis settings
 redis:
+  external: "{{ .Values.global.external.enabled }}"
   host: "phase-redis"
   port: "6379"
   image:
@@ -90,7 +104,6 @@ redis:
       cpu: 100m
       memory: 256Mi
 
-# SSO settings
 sso:
   providers: "google,github,gitlab"
 

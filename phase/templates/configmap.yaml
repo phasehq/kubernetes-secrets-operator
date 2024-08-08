@@ -2,6 +2,8 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "phase.fullname" . }}-config
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
 data:
   HOST: {{ .Values.global.host | quote }}
   HTTP_PROTOCOL: {{ .Values.global.httpProtocol | quote }}
@@ -12,4 +14,4 @@ data:
   DATABASE_USER: {{ .Values.database.user | quote }}
   REDIS_HOST: {{ .Values.redis.host | quote }}
   REDIS_PORT: {{ .Values.redis.port | quote }}
-  NEXT_TELEMETRY_DISABLED: "1"
+  NEXT_TELEMETRY_DISABLED: {{ .Values.config.nextTelemetryDisabled | default "1" | quote }}

@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "phase.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.backend.replicaCount }}
+  replicas: {{ .Values.app.backend.replicaCount }}
   selector:
     matchLabels:
       {{- include "phase.selectorLabels" . | nindent 6 }}
@@ -22,8 +22,8 @@ spec:
         command: ['sh', '-c', 'until nc -z {{ .Values.database.host }} {{ .Values.database.port }}; do echo waiting for postgres; sleep 2; done;']
       containers:
       - name: backend
-        image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
-        imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+        image: "{{ .Values.app.backend.image.repository }}:{{ .Values.app.backend.image.tag }}"
+        imagePullPolicy: {{ .Values.app.backend.image.pullPolicy }}
         envFrom:
         - configMapRef:
             name: {{ include "phase.fullname" . }}-config
@@ -38,27 +38,29 @@ spec:
           value: "$(HTTP_PROTOCOL)$(HOST)"
         - name: SESSION_COOKIE_DOMAIN
           value: "$(HOST)"
-        {{- if .Values.backend.readinessProbe.enabled }}
+        {{- if .Values.app.backend.readinessProbe.enabled }}
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
             httpHeaders:
-              - name: Host
-                value: "{{ include "phase.fullname" . }}-backend"
-          initialDelaySeconds: {{ .Values.backend.readinessProbe.initialDelaySeconds }}
-          periodSeconds: {{ .Values.backend.readinessProbe.periodSeconds }}
-          timeoutSeconds: {{ .Values.backend.readinessProbe.timeoutSeconds }}
+            - name: Host
+              value: "{{ include "phase.fullname" . }}-backend"
+          initialDelaySeconds: {{ .Values.app.backend.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.app.backend.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.app.backend.readinessProbe.timeoutSeconds }}
         {{- end }}
-        {{- if .Values.backend.livenessProbe.enabled }}
+        {{- if .Values.app.backend.livenessProbe.enabled }}
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
             httpHeaders:
-              - name: Host
-                value: "{{ include "phase.fullname" . }}-backend"
-          initialDelaySeconds: {{ .Values.backend.livenessProbe.initialDelaySeconds }}
-          periodSeconds: {{ .Values.backend.livenessProbe.periodSeconds }}
-          timeoutSeconds: {{ .Values.backend.livenessProbe.timeoutSeconds }}
+            - name: Host
+              value: "{{ include "phase.fullname" . }}-backend"
+          initialDelaySeconds: {{ .Values.app.backend.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.app.backend.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.app.backend.livenessProbe.timeoutSeconds }}
         {{- end }}
+        resources:
+          {{- toYaml .Values.app.backend.resources | nindent 12 }}

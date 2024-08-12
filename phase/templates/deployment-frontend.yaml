@@ -39,7 +39,7 @@ spec:
         {{- if .Values.app.frontend.readinessProbe.enabled }}
         readinessProbe:
           httpGet:
-            path: /api/health
+            path: api/health
             port: 3000
           initialDelaySeconds: {{ .Values.app.frontend.readinessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.app.frontend.readinessProbe.periodSeconds }}

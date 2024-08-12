@@ -37,7 +37,7 @@ spec:
         {{- if .Values.app.backend.readinessProbe.enabled }}
         readinessProbe:
           httpGet:
-            path: /health
+            path: 493c5048-99f9-4eac-ad0d-98c3740b491f/health
             port: 8000
             httpHeaders:
             - name: Host
@@ -49,7 +49,7 @@ spec:
         {{- if .Values.app.backend.livenessProbe.enabled }}
         livenessProbe:
           httpGet:
-            path: /health
+            path: 493c5048-99f9-4eac-ad0d-98c3740b491f/health
             port: 8000
             httpHeaders:
             - name: Host

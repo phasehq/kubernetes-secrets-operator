@@ -2,18 +2,18 @@
 global:
   host: "localhost"
   httpProtocol: "https://"
-  version: "latest"
+  version: v2.29.8
+  images:
+    frontend:
+      repository: phasehq/frontend
+    backend:
+      repository: phasehq/backend
   external:
     enabled: false  # Set to true to use external managed services
-
-config:
-  nextTelemetryDisabled: "1"
 
 app:
   frontend:
     image:
-      repository: phasehq/frontend
-      tag: "{{ .Values.global.version }}"
       pullPolicy: IfNotPresent
     replicaCount: 1
     service:
@@ -30,8 +30,6 @@ app:
 
   backend:
     image:
-      repository: phasehq/backend
-      tag: "{{ .Values.global.version }}"
       pullPolicy: IfNotPresent
     replicaCount: 1
     service:
@@ -54,8 +52,6 @@ app:
 
   worker:
     image:
-      repository: phasehq/backend
-      tag: "{{ .Values.global.version }}"
       pullPolicy: IfNotPresent
     replicaCount: 1
     resources:
@@ -64,15 +60,15 @@ app:
         memory: 512Mi
 
 database:
-  external: "{{ .Values.global.external.enabled }}"
-  host: "phase-postgres"
+  external: false
+  host: "{{ .Release.Name }}-postgres"
   port: "5432"
   name: "postgres-db-name"
   user: "postgres-user"
   image:
     repository: postgres
     tag: 15.4-alpine3.17
-    pullPolicy: IfNotPresent
+  pullPolicy: IfNotPresent
   service:
     port: 5432
   persistence:
@@ -87,13 +83,13 @@ database:
 
 # Redis settings
 redis:
-  external: "{{ .Values.global.external.enabled }}"
-  host: "phase-redis"
+  external: false
+  host: "{{ .Release.Name }}-redis"
   port: "6379"
   image:
     repository: redis
     tag: alpine3.19
-    pullPolicy: IfNotPresent
+  pullPolicy: IfNotPresent
   service:
     port: 6379
   readinessProbe:

@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: "{{ .Values.app.backend.image.repository }}:{{ .Values.app.backend.image.tag }}"
+        image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"
         imagePullPolicy: {{ .Values.app.backend.image.pullPolicy }}
         envFrom:
         - configMapRef:

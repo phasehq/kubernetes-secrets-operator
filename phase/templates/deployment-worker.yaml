@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: worker
-        image: "{{ .Values.app.worker.image.repository }}:{{ .Values.app.worker.image.tag }}"
+        image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"
         imagePullPolicy: {{ .Values.app.worker.image.pullPolicy }}
         command: ["python", "manage.py", "rqworker", "default"]
         envFrom:

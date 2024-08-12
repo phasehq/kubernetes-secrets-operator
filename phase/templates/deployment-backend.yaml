@@ -16,10 +16,6 @@ spec:
         {{- include "phase.selectorLabels" . | nindent 8 }}
         app: backend
     spec:
-      initContainers:
-      - name: wait-for-postgres
-        image: busybox:1.28
-        command: ['sh', '-c', 'until nc -z {{ .Values.database.host }} {{ .Values.database.port }}; do echo waiting for postgres; sleep 2; done;']
       containers:
       - name: backend
         image: "{{ .Values.app.backend.image.repository }}:{{ .Values.app.backend.image.tag }}"

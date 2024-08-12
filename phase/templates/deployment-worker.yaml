@@ -16,19 +16,6 @@ spec:
         {{- include "phase.selectorLabels" . | nindent 8 }}
         app: worker
     spec:
-      initContainers:
-      - name: wait-for-postgres
-        image: busybox
-        command: ['sh', '-c', 'until nc -z $DATABASE_HOST $DATABASE_PORT; do echo waiting for postgres; sleep 2; done;']
-        envFrom:
-        - configMapRef:
-            name: {{ include "phase.fullname" . }}-config
-      - name: wait-for-redis
-        image: busybox
-        command: ['sh', '-c', 'until nc -z $REDIS_HOST $REDIS_PORT; do echo waiting for redis; sleep 2; done;']
-        envFrom:
-        - configMapRef:
-            name: {{ include "phase.fullname" . }}-config
       containers:
       - name: worker
         image: "{{ .Values.app.worker.image.repository }}:{{ .Values.app.worker.image.tag }}"

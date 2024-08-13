@@ -31,7 +31,7 @@ spec:
         - name: NEXTAUTH_URL
           value: "$(HTTP_PROTOCOL)$(HOST)"
         - name: BACKEND_API_BASE
-          value: "$(HTTP_PROTOCOL)$(HOST)/service"
+          value: "http://{{ include "phase.fullname" . }}-backend:{{ .Values.app.backend.service.port }}"
         - name: NEXT_PUBLIC_BACKEND_API_BASE
           value: "$(HTTP_PROTOCOL)$(HOST)/service"
         - name: NEXT_PUBLIC_NEXTAUTH_PROVIDERS

@@ -36,8 +36,6 @@ Common labels
 {{- define "phase.labels" -}}
 helm.sh/chart: {{ include "phase.chart" . }}
 {{ include "phase.selectorLabels" . }}
-{{- if .Chart.AppVersion }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}

@@ -1,0 +1,149 @@
+# Global settings
+global:
+  host: "localhost"
+  httpProtocol: "https://"
+  version: latest
+  images:
+    frontend:
+      repository: phasehq/frontend
+    backend:
+      repository: phasehq/backend
+  external:
+    enabled: false  # Set to true to use external managed services
+
+sso:
+  providers: "google,github,gitlab"
+
+# Secrets (DO NOT use these in production, generate your own secure values)
+secrets:
+  nextauthSecret: "efd7e1e87edd416bc8ee28e7ee1d961ab7f4a4724ea4249d36f07c92616a322d"
+  secretKey: "ee728b91f92b48841a847fad61549f9f0b384f172b74bdcc859c1aadbfb633bd"
+  serverSecret: "896d2d2462ebd12683cee44d7808939217da961d1f15e69c977ae250f23a65c9"
+  databasePassword: "f5cc076c4788bba216567380247b394d71a2fa0c8970052005a824bad340c6be"
+  googleClientId: ""
+  googleClientSecret: ""
+  githubClientId: ""
+  githubClientSecret: ""
+  gitlabClientId: ""
+  gitlabClientSecret: ""
+
+# Ingress settings
+ingress:
+  enabled: true
+  className: "nginx"
+  # host: "your-domain.com"
+  tls: []
+
+# Cert manager settings
+certManager:
+  enabled: false
+  issuerName: ""
+  issuerKind: ""
+
+app:
+  frontend:
+    image:
+      pullPolicy: IfNotPresent
+    replicaCount: 1
+    service:
+      type: ClusterIP
+      port: 3000
+    readinessProbe:
+      enabled: true
+      initialDelaySeconds: 10
+      periodSeconds: 5
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+
+  backend:
+    image:
+      pullPolicy: IfNotPresent
+    replicaCount: 1
+    service:
+      type: ClusterIP
+      port: 8000
+    readinessProbe:
+      enabled: true
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 5
+    livenessProbe:
+      enabled: true
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 5
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+
+  worker:
+    image:
+      pullPolicy: IfNotPresent
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+
+database:
+  external: false
+  host: "{{ .Release.Name }}-postgres"
+  port: "5432"
+  name: "postgres-db-name"
+  user: "postgres-user"
+  image:
+    repository: postgres
+    tag: 15.4-alpine3.17
+  pullPolicy: IfNotPresent
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+# Redis settings
+redis:
+  external: false
+  host: "{{ .Release.Name }}-redis"
+  port: "6379"
+  image:
+    repository: redis
+    tag: alpine3.19
+  pullPolicy: IfNotPresent
+  service:
+    port: 6379
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+
+# Autoscaling settings
+autoscaling:
+  frontend:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+  backend:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+  worker:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80

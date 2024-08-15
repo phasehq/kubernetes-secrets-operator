@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "phase.fullname" . }}-backend
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.app.backend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "phase.selectorLabels" . | nindent 6 }}
+      app: backend
+  template:
+    metadata:
+      labels:
+        {{- include "phase.selectorLabels" . | nindent 8 }}
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"
+        imagePullPolicy: {{ .Values.app.backend.image.pullPolicy }}
+        envFrom:
+        - configMapRef:
+            name: {{ include "phase.fullname" . }}-config
+        - secretRef:
+            name: {{ include "phase.fullname" . }}-secrets
+        env:
+        - name: OAUTH_REDIRECT_URI
+          value: "$(HTTP_PROTOCOL)$(HOST)"
+        - name: ALLOWED_HOSTS
+          value: "$(HOST),{{ include "phase.fullname" . }}-backend"
+        - name: ALLOWED_ORIGINS
+          value: "$(HTTP_PROTOCOL)$(HOST)"
+        - name: SESSION_COOKIE_DOMAIN
+          value: "$(HOST)"
+        {{- if .Values.app.backend.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: 493c5048-99f9-4eac-ad0d-98c3740b491f/health
+            port: 8000
+            httpHeaders:
+            - name: Host
+              value: "{{ include "phase.fullname" . }}-backend"
+          initialDelaySeconds: {{ .Values.app.backend.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.app.backend.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.app.backend.readinessProbe.timeoutSeconds }}
+        {{- end }}
+        {{- if .Values.app.backend.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: 493c5048-99f9-4eac-ad0d-98c3740b491f/health
+            port: 8000
+            httpHeaders:
+            - name: Host
+              value: "{{ include "phase.fullname" . }}-backend"
+          initialDelaySeconds: {{ .Values.app.backend.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.app.backend.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.app.backend.livenessProbe.timeoutSeconds }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.app.backend.resources | nindent 12 }}

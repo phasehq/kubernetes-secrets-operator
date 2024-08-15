@@ -1,0 +1,55 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "phase.fullname" . }}
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className | default "nginx" }}
+    {{- if .Values.certManager.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.certManager.issuerName }}
+    {{- end }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "64k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "128k"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | default .Values.global.host | quote }}
+      http:
+        paths:
+          - path: /service(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "phase.fullname" $ }}-backend
+                port:
+                  number: 8000
+          - path: /()(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "phase.fullname" $ }}-frontend
+                port:
+                  number: 3000
+  {{- if or .Values.ingress.tls .Values.certManager.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | default .Values.global.host | quote }}
+      {{- if .Values.certManager.enabled }}
+      secretName: {{ include "phase.fullname" . }}-tls
+      {{- else }}
+      secretName: {{ .Values.ingress.tlsSecretName }}
+      {{- end }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "phase.fullname" . }}-worker
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.app.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "phase.selectorLabels" . | nindent 6 }}
+      app: worker
+  template:
+    metadata:
+      labels:
+        {{- include "phase.selectorLabels" . | nindent 8 }}
+        app: worker
+    spec:
+      containers:
+      - name: worker
+        image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"
+        imagePullPolicy: {{ .Values.app.worker.image.pullPolicy }}
+        command: ["python", "manage.py", "rqworker", "default"]
+        envFrom:
+        - configMapRef:
+            name: {{ include "phase.fullname" . }}-config
+        - secretRef:
+            name: {{ include "phase.fullname" . }}-secrets
+        env:
+        - name: ALLOWED_HOSTS
+          value: "$(HOST),{{ include "phase.fullname" . }}-worker"
+        - name: ALLOWED_ORIGINS
+          value: "$(HTTP_PROTOCOL)$(HOST)"
+        - name: SESSION_COOKIE_DOMAIN
+          value: "$(HOST)"
+        resources:
+          {{- toYaml .Values.app.worker.resources | nindent 12 }}

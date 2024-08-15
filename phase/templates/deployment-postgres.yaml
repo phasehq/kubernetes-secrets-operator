@@ -1,0 +1,101 @@
+{{- if not .Values.global.external.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "phase.fullname" . }}-postgres
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "phase.selectorLabels" . | nindent 6 }}
+      app: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "phase.selectorLabels" . | nindent 8 }}
+        app: postgres
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+      - name: postgres
+        image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
+        imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+        securityContext:
+          runAsUser: 999
+          runAsGroup: 999
+        envFrom:
+        - configMapRef:
+            name: {{ include "phase.fullname" . }}-config
+        - secretRef:
+            name: {{ include "phase.fullname" . }}-secrets
+        env:
+        - name: POSTGRES_DB
+          value: {{ .Values.database.name | quote }}
+        - name: POSTGRES_USER
+          value: {{ .Values.database.user | quote }}
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "phase.fullname" . }}-secrets
+              key: DATABASE_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        ports:
+        - name: postgres
+          containerPort: 5432
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          {{- toYaml .Values.database.resources | nindent 12 }}
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+      volumes:
+      - name: postgres-storage
+        {{- if .Values.database.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "phase.fullname" . }}-postgres-pvc
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+
+---
+{{- if and (not .Values.global.external.enabled) .Values.database.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "phase.fullname" . }}-postgres-pvc
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.database.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.database.persistence.size }}
+  {{- if .Values.database.persistence.storageClass }}
+  storageClassName: {{ .Values.database.persistence.storageClass }}
+  {{- end }}
+{{- end }}
+{{- end }}

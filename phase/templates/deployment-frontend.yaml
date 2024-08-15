@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "phase.fullname" . }}-frontend
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.app.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "phase.selectorLabels" . | nindent 6 }}
+      app: frontend
+  template:
+    metadata:
+      labels:
+        {{- include "phase.selectorLabels" . | nindent 8 }}
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: "{{ .Values.global.images.frontend.repository }}:{{ .Values.global.version }}"
+        imagePullPolicy: {{ .Values.app.frontend.image.pullPolicy }}
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: {{ include "phase.fullname" . }}-config
+        - secretRef:
+            name: {{ include "phase.fullname" . }}-secrets
+        env:
+        - name: NEXTAUTH_URL
+          value: "$(HTTP_PROTOCOL)$(HOST)"
+        - name: BACKEND_API_BASE
+          value: "http://{{ include "phase.fullname" . }}-backend:{{ .Values.app.backend.service.port }}"
+        - name: NEXT_PUBLIC_BACKEND_API_BASE
+          value: "$(HTTP_PROTOCOL)$(HOST)/service"
+        - name: NEXT_PUBLIC_NEXTAUTH_PROVIDERS
+          value: "$(SSO_PROVIDERS)"
+        {{- if .Values.app.frontend.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: api/health
+            port: 3000
+          initialDelaySeconds: {{ .Values.app.frontend.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.app.frontend.readinessProbe.periodSeconds }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.app.frontend.resources | nindent 12 }}

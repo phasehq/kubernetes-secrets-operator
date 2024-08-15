@@ -34,6 +34,12 @@ ingress:
   # host: "your-domain.com"
   tls: []
 
+# Cert manager settings
+certManager:
+  enabled: false
+  issuerName: ""
+  issuerKind: ""
+
 app:
   frontend:
     image:

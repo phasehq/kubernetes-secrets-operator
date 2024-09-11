@@ -15,6 +15,7 @@ import base64
 from kubernetes import client
 from typing import Dict
 import json
+import logging
 
 logging.basicConfig(level=logging.ERROR)
 

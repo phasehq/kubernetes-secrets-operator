@@ -17,7 +17,7 @@ from typing import Dict
 import json
 import logging
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.WARNING)
 
 def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, logger) -> str:
     logger.debug(f"Entering get_phase_service_token. Auth config: {json.dumps(auth_config)}")

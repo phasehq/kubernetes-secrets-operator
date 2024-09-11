@@ -3,13 +3,14 @@ from kubernetes import client
 from kubernetes.client.rest import ApiException
 import base64
 from utils.auth.kubernetes import get_service_account_jwt
-from utils.network import authenticate_with_phase_api, phase_secrets_fetch
+from utils.network import authenticate_with_phase_api
+from internals.secrets.fetch import phase_secrets_fetch
 from typing import Dict
 from utils.const import PHASE_CLOUD_API_HOST
-from utils.cache import get_cached_token
+from utils.cache import get_cached_token, update_cached_token
 from utils.secrets.types import process_secrets
 from utils.secrets.write import create_secret
-from utils.workload import redeploy_affected_deployments
+from utils.workload.deploy import redeploy_affected_deployments
 
 def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, logger) -> str:
     if 'serviceToken' in auth_config:
@@ -19,6 +20,7 @@ def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, 
         api_instance = client.CoreV1Api()
         api_response = api_instance.read_namespaced_secret(service_token_secret_name, service_token_secret_namespace)
         return base64.b64decode(api_response.data['token']).decode('utf-8')
+    
     elif 'kubernetesAuth' in auth_config:
         kubernetes_auth = auth_config['kubernetesAuth']
         service_account_id = kubernetes_auth['phaseServiceAccountId']
@@ -27,11 +29,14 @@ def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, 
         cached_token = get_cached_token(service_account_id)
         if cached_token:
             return cached_token['token']
+
+        # For testing TODO: remove later
+        phase_host_test="https://psychology-jvc-pat-easily.trycloudflare.com"
         
         # If no valid cached token, authenticate
         jwt_token = get_service_account_jwt()
         auth_response = authenticate_with_phase_api(
-            host=phase_host,
+            host=phase_host_test,
             auth_token=jwt_token,
             service_account_id=service_account_id,
             auth_type="kubernetes"
@@ -48,7 +53,7 @@ def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, 
     else:
         raise Exception("No valid authentication method found in the spec")
 
-@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=60)
+@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=10)
 def sync_secrets(spec, name, namespace, logger, **kwargs):
     try:
         # Get Config

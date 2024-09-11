@@ -1,19 +1,58 @@
 import kopf
-import datetime
-import kubernetes.client
+from kubernetes import client
 from kubernetes.client.rest import ApiException
-from kubernetes.client import CoreV1Api
-from cmd.secrets.fetch import phase_secrets_fetch
-from utils.secrets.write import create_secret
-from utils.workload.deploy import redeploy_affected_deployments
+import base64
+from utils.auth.kubernetes import get_service_account_jwt
+from utils.network import authenticate_with_phase_api, phase_secrets_fetch
+from typing import Dict
 from utils.const import PHASE_CLOUD_API_HOST
+from utils.cache import get_cached_token
+from utils.secrets.types import process_secrets
+from utils.secrets.write import create_secret
+from utils.workload import redeploy_affected_deployments
+
+def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, logger) -> str:
+    if 'serviceToken' in auth_config:
+        # Use existing service token authentication without caching
+        service_token_secret_name = auth_config['serviceToken']['serviceTokenSecretReference']['secretName']
+        service_token_secret_namespace = auth_config['serviceToken']['serviceTokenSecretReference'].get('secretNamespace', namespace)
+        api_instance = client.CoreV1Api()
+        api_response = api_instance.read_namespaced_secret(service_token_secret_name, service_token_secret_namespace)
+        return base64.b64decode(api_response.data['token']).decode('utf-8')
+    elif 'kubernetesAuth' in auth_config:
+        kubernetes_auth = auth_config['kubernetesAuth']
+        service_account_id = kubernetes_auth['phaseServiceAccountId']
+        
+        # Check for cached token
+        cached_token = get_cached_token(service_account_id)
+        if cached_token:
+            return cached_token['token']
+        
+        # If no valid cached token, authenticate
+        jwt_token = get_service_account_jwt()
+        auth_response = authenticate_with_phase_api(
+            host=phase_host,
+            auth_token=jwt_token,
+            service_account_id=service_account_id,
+            auth_type="kubernetes"
+        )
+        
+        if not auth_response or 'token' not in auth_response:
+            raise Exception("Failed to authenticate with Phase API")
+        
+        # Cache the new token
+        update_cached_token(service_account_id, auth_response)
+        
+        logger.info(f"Refreshed Phase service token for service account {service_account_id}")
+        return auth_response['token']
+    else:
+        raise Exception("No valid authentication method found in the spec")
 
 @kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=60)
 def sync_secrets(spec, name, namespace, logger, **kwargs):
     try:
-
         # Get Config
-        api_instance = CoreV1Api()
+        api_instance = client.CoreV1Api()
         managed_secret_references = spec.get('managedSecretReferences', [])
         phase_host = spec.get('phaseHost', PHASE_CLOUD_API_HOST)
         phase_app = spec.get('phaseApp')
@@ -21,13 +60,13 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         phase_app_env_path = spec.get('phaseAppEnvPath', '/')
         phase_app_env_tag = spec.get('phaseAppEnvTag')
 
-        # If authentication serviceToken (Phase Service Token)
-        service_token_secret_name = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretName', 'phase-service-token')
-        api_response = api_instance.read_namespaced_secret(service_token_secret_name, namespace)
-        service_token = base64.b64decode(api_response.data['token']).decode('utf-8')
+        # Get Phase service token
+        auth_config = spec.get('authentication', {})
+        phase_service_token = get_phase_service_token(auth_config, phase_host, namespace, logger)
 
+        # Fetch secrets from Phase
         phase_secrets_dict = phase_secrets_fetch(
-            phase_service_token=service_token,
+            phase_service_token=phase_service_token,
             phase_service_host=phase_host,
             phase_app=phase_app,
             env_name=phase_app_env,

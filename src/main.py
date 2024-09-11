@@ -16,7 +16,7 @@ from kubernetes import client
 from typing import Dict
 import json
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.ERROR)
 
 def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, logger) -> str:
     logger.debug(f"Entering get_phase_service_token. Auth config: {json.dumps(auth_config)}")
@@ -104,6 +104,7 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         managed_secret_references = spec.get('managedSecretReferences', [])
         phase_host = spec.get('phaseHost', PHASE_CLOUD_API_HOST)
         phase_app = spec.get('phaseApp')
+        phase_app_id = spec.get('phaseAppId')
         phase_app_env = spec.get('phaseAppEnv', 'production')
         phase_app_env_path = spec.get('phaseAppEnvPath', '/')
         phase_app_env_tag = spec.get('phaseAppEnvTag')
@@ -117,6 +118,7 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
             phase_service_token=phase_service_token,
             phase_service_host=phase_host,
             phase_app=phase_app,
+            phase_app_id=phase_app_id,
             env_name=phase_app_env,
             tags=phase_app_env_tag,
             path=phase_app_env_path

@@ -11,50 +11,87 @@ from utils.cache import get_cached_token, update_cached_token
 from utils.secrets.types import process_secrets
 from utils.secrets.write import create_secret
 from utils.workload.deploy import redeploy_affected_deployments
+import base64
+from kubernetes import client
+from typing import Dict
+import json
 
 def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, logger) -> str:
+    logger.debug(f"Entering get_phase_service_token. Auth config: {json.dumps(auth_config)}")
+    logger.debug(f"Phase host: {phase_host}, Namespace: {namespace}")
+
     if 'serviceToken' in auth_config:
-        # Use existing service token authentication without caching
+        logger.debug("Using serviceToken authentication method")
         service_token_secret_name = auth_config['serviceToken']['serviceTokenSecretReference']['secretName']
         service_token_secret_namespace = auth_config['serviceToken']['serviceTokenSecretReference'].get('secretNamespace', namespace)
-        api_instance = client.CoreV1Api()
-        api_response = api_instance.read_namespaced_secret(service_token_secret_name, service_token_secret_namespace)
-        return base64.b64decode(api_response.data['token']).decode('utf-8')
+        logger.debug(f"Secret name: {service_token_secret_name}, Secret namespace: {service_token_secret_namespace}")
+
+        try:
+            api_instance = client.CoreV1Api()
+            api_response = api_instance.read_namespaced_secret(service_token_secret_name, service_token_secret_namespace)
+            logger.debug("Successfully read the service token secret")
+            token = base64.b64decode(api_response.data['token']).decode('utf-8')
+            logger.debug("Successfully decoded the service token")
+            return token
+        except Exception as e:
+            logger.error(f"Error reading or decoding service token: {str(e)}")
+            raise
     
     elif 'kubernetesAuth' in auth_config:
+        logger.debug("Using kubernetesAuth authentication method")
         kubernetes_auth = auth_config['kubernetesAuth']
         service_account_id = kubernetes_auth['phaseServiceAccountId']
+        logger.debug(f"Service account ID: {service_account_id}")
         
-        # Check for cached token
         cached_token = get_cached_token(service_account_id)
         if cached_token:
+            logger.debug("Using cached token")
             return cached_token['token']
 
+        logger.debug("No valid cached token found. Proceeding with authentication.")
+
         # For testing TODO: remove later
-        phase_host_test="https://psychology-jvc-pat-easily.trycloudflare.com"
+        phase_host_test = "https://psychology-jvc-pat-easily.trycloudflare.com"
+        logger.debug(f"Using test Phase host: {phase_host_test}")
         
-        # If no valid cached token, authenticate
-        jwt_token = get_service_account_jwt()
-        auth_response = authenticate_with_phase_api(
-            host=phase_host_test,
-            auth_token=jwt_token,
-            service_account_id=service_account_id,
-            auth_type="kubernetes"
-        )
+        try:
+            jwt_token = get_service_account_jwt()
+            logger.debug("Successfully retrieved service account JWT")
+        except Exception as e:
+            logger.error(f"Error getting service account JWT: {str(e)}")
+            raise
+
+        try:
+            auth_response = authenticate_with_phase_api(
+                host=phase_host_test,
+                auth_token=jwt_token,
+                service_account_id=service_account_id,
+                auth_type="kubernetes"
+            )
+            logger.debug(f"Received auth response: {json.dumps(auth_response)}")
+        except Exception as e:
+            logger.error(f"Error authenticating with Phase API: {str(e)}")
+            raise
         
         if not auth_response or 'token' not in auth_response:
+            logger.error(f"Invalid auth response: {json.dumps(auth_response)}")
             raise Exception("Failed to authenticate with Phase API")
         
-        # Cache the new token
-        update_cached_token(service_account_id, {
-            'token': auth_response['token'],
-            'id': auth_response['id'],
-            'expiry': auth_response['expiry']
-        })
+        try:
+            update_cached_token(service_account_id, {
+                'token': auth_response['token'],
+                'id': auth_response['id'],
+                'expiry': auth_response['expiry']
+            })
+            logger.debug("Successfully cached the new token")
+        except Exception as e:
+            logger.error(f"Error caching token: {str(e)}")
+            # Continue even if caching fails
         
         logger.info(f"Refreshed Phase service token for service account {service_account_id}")
         return auth_response['token']
     else:
+        logger.error(f"Invalid auth config: {json.dumps(auth_config)}")
         raise Exception("No valid authentication method found in the spec")
 
 @kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=10)

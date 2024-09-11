@@ -302,3 +302,46 @@ def delete_phase_secrets(token_type: str, app_token: str, environment_id: str, s
         handle_connection_error(e)
     except requests.exceptions.SSLError as e:
         handle_ssl_error(e)
+
+
+def authenticate_with_phase_api(host: str, auth_token: str, service_account_id: str, auth_type: str) -> Dict:
+    """
+    Authenticate with the Phase API using various authentication providers.
+    
+    :param host: Phase host
+    :param auth_token: The authentication token (e.g., JWT, IAM token)
+    :param service_account_id: The ID of the service account
+    :param auth_type: The type of authentication (e.g., 'kubernetes', 'aws', 'gcp', 'azure', 'oidc')
+    :return: The response from the Phase API or None if authentication fails
+    """
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {auth_token}"
+    }
+
+    auth_data = {
+        "service_account_id": service_account_id,
+        "auth_type": auth_type,
+    }
+
+    if auth_type == "kubernetes":
+        auth_data["jwt"] = auth_token
+    # TODO: Implement other auth providers
+    # elif auth_type in ["aws", "gcp", "azure", "oidc"]:
+    #     auth_data["token"] = auth_token
+    else:
+        raise ValueError(f"Unsupported auth_type: {auth_type}")
+
+    URL = f"{host}/api/v1/service-accounts/{auth_type}/auth"
+
+    try:
+        response = requests.post(URL, headers=headers, json=auth_data, verify=VERIFY_SSL)
+        handle_request_errors(response)
+        return response.json()
+    except requests.exceptions.ConnectionError as e:
+        handle_connection_error(e)
+    except requests.exceptions.SSLError as e:
+        handle_ssl_error(e)
+    except Exception as e:
+        print(f"Error authenticating with Phase API: {e}")
+        return None

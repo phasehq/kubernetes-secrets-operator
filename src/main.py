@@ -16,6 +16,8 @@ from kubernetes import client
 from typing import Dict
 import json
 
+logging.basicConfig(level=logging.DEBUG)
+
 def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, logger) -> str:
     logger.debug(f"Entering get_phase_service_token. Auth config: {json.dumps(auth_config)}")
     logger.debug(f"Phase host: {phase_host}, Namespace: {namespace}")

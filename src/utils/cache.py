@@ -13,8 +13,8 @@ def get_cached_token(service_account_id: str) -> Optional[Dict]:
     if os.path.exists(cache_file):
         with open(cache_file, 'r') as f:
             cache = json.load(f)
-        if time.time() < cache.get('expiry', 0):
-            return cache
+            if time.time() < cache.get('expiry', 0):
+                return cache
     return None
 
 def update_cached_token(service_account_id: str, token_data: Dict):

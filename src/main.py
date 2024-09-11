@@ -115,15 +115,19 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         phase_service_token = get_phase_service_token(auth_config, phase_host, namespace, logger)
 
         # Fetch secrets from Phase
-        phase_secrets_dict = phase_secrets_fetch(
-            phase_service_token=phase_service_token,
-            phase_service_host=phase_host,
-            phase_app=phase_app,
-            phase_app_id=phase_app_id,
-            env_name=phase_app_env,
-            tags=phase_app_env_tag,
-            path=phase_app_env_path
-        )
+        try:
+            phase_secrets_dict = phase_secrets_fetch(
+                phase_service_token=phase_service_token,
+                phase_service_host=phase_host,
+                phase_app=phase_app,
+                phase_app_id=phase_app_id,
+                env_name=phase_app_env,
+                tags=phase_app_env_tag,
+                path=phase_app_env_path
+            )
+        except ValueError as ve:
+            logger.warning(f"Failed to fetch secrets for PhaseSecret {name} in namespace {namespace}: {ve}")
+            return  # Exit the function early, but don't crash the operator
 
         secret_changed = False
         for secret_reference in managed_secret_references:
@@ -155,6 +159,6 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         logger.info(f"Secrets for PhaseSecret {name} have been successfully updated in namespace {namespace}")
 
     except ApiException as e:
-        logger.error(f"Failed to fetch secrets for PhaseSecret {name} in namespace {namespace}: {e}")
+        logger.error(f"Kubernetes API error when handling PhaseSecret {name} in namespace {namespace}: {e}")
     except Exception as e:
-        logger.error(f"Unexpected error when handling PhaseSecret {name} in namespace {namespace}: {e}")
+        logger.error(f"Unexpected error when handling PhaseSecret {name} in namespace {namespace}: {e}", exc_info=True)

@@ -46,7 +46,11 @@ def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, 
             raise Exception("Failed to authenticate with Phase API")
         
         # Cache the new token
-        update_cached_token(service_account_id, auth_response)
+        update_cached_token(service_account_id, {
+            'token': auth_response['token'],
+            'id': auth_response['id'],
+            'expiry': auth_response['expiry']
+        })
         
         logger.info(f"Refreshed Phase service token for service account {service_account_id}")
         return auth_response['token']

@@ -63,6 +63,27 @@ spec:
                             secretNamespace:
                               description: The namespace where the Kubernetes Secret is located.
                               type: string
+                    kubernetesAuth:
+                      type: object
+                      required:
+                        - phaseServiceAccountId
+                        - serviceAccountRef
+                      properties:
+                        phaseServiceAccountId:
+                          description: The service account ID in Phase.
+                          type: string
+                        serviceAccountRef:
+                          type: object
+                          required:
+                            - name
+                            - namespace
+                          properties:
+                            name:
+                              description: The name of the Kubernetes ServiceAccount.
+                              type: string
+                            namespace:
+                              description: The namespace of the Kubernetes ServiceAccount.
+                              type: string
                 phaseHost:
                   description: Phase host to pull secrets from.
                   type: string

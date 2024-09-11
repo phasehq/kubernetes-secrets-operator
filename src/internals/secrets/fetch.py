@@ -7,7 +7,7 @@ from utils.secret_referencing import resolve_all_secrets
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
-def phase_secrets_fetch(phase_service_token=None, phase_service_host=None, env_name=None, phase_app=None, keys=None, tags=None, path='/'):
+def phase_secrets_fetch(phase_service_token=None, phase_service_host=None, env_name=None, phase_app=None, phase_app_id=None, keys=None, tags=None, path='/'):
     """
     Fetch and return secrets based on the provided environment, keys, and tags.
     """
@@ -15,7 +15,7 @@ def phase_secrets_fetch(phase_service_token=None, phase_service_host=None, env_n
     phase = Phase(init=False, pss=phase_service_token, host=phase_service_host)
 
     try:
-        all_secrets = phase.get(env_name=env_name, app_name=phase_app, tag=tags, path=path)
+        all_secrets = phase.get(env_name=env_name, app_name=phase_app, app_id=phase_app_id, tag=tags, path=path)
         resolved_secrets = []
         for secret in all_secrets:
             try:

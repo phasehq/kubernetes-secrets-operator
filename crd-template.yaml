@@ -30,7 +30,10 @@ spec:
               description: PhaseSecretSpec defines the desired state of PhaseSecret
               properties:
                 phaseApp:
-                  description: The Phase application to fetch secrets from.
+                  description: The Phase application name to fetch secrets from.
+                  type: string
+                phaseAppId:
+                  description: The Phase application ID to fetch secrets from.
                   type: string
                 phaseAppEnv:
                   description: The environment variable representing the app environment in Phase.
@@ -62,6 +65,27 @@ spec:
                               type: string
                             secretNamespace:
                               description: The namespace where the Kubernetes Secret is located.
+                              type: string
+                    kubernetesAuth:
+                      type: object
+                      required:
+                        - phaseServiceAccountId
+                        - serviceAccountRef
+                      properties:
+                        phaseServiceAccountId:
+                          description: The service account ID in Phase.
+                          type: string
+                        serviceAccountRef:
+                          type: object
+                          required:
+                            - name
+                            - namespace
+                          properties:
+                            name:
+                              description: The name of the Kubernetes ServiceAccount.
+                              type: string
+                            namespace:
+                              description: The namespace of the Kubernetes ServiceAccount.
                               type: string
                 phaseHost:
                   description: Phase host to pull secrets from.
@@ -127,7 +151,7 @@ spec:
                   type: integer
                   default: 60
               required:
-                - phaseApp
+                - phaseAppId
                 - managedSecretReferences
                 - phaseHost
             status:

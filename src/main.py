@@ -53,10 +53,6 @@ def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, 
 
         logger.debug("No valid cached token found. Proceeding with authentication.")
 
-        # For testing TODO: remove later
-        phase_host_test = "https://psychology-jvc-pat-easily.trycloudflare.com"
-        logger.debug(f"Using test Phase host: {phase_host_test}")
-        
         try:
             jwt_token = get_service_account_jwt()
             logger.debug("Successfully retrieved service account JWT")
@@ -66,7 +62,7 @@ def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, 
 
         try:
             auth_response = authenticate_with_phase_api(
-                host=phase_host_test,
+                host=phase_host,
                 auth_token=jwt_token,
                 service_account_id=service_account_id,
                 auth_type="kubernetes"

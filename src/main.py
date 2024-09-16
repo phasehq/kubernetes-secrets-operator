@@ -3,7 +3,7 @@ from kubernetes import client
 from kubernetes.client.rest import ApiException
 import base64
 from utils.auth.kubernetes import get_service_account_jwt
-from utils.network import authenticate_with_phase_api
+from utils.network import authenticate_service_account
 from internals.secrets.fetch import phase_secrets_fetch
 from typing import Dict
 from utils.const import PHASE_CLOUD_API_HOST
@@ -61,7 +61,7 @@ def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, 
             raise
 
         try:
-            auth_response = authenticate_with_phase_api(
+            auth_response = authenticate_service_account(
                 host=phase_host,
                 auth_token=jwt_token,
                 service_account_id=service_account_id,

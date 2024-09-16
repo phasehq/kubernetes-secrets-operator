@@ -304,9 +304,9 @@ def delete_phase_secrets(token_type: str, app_token: str, environment_id: str, s
         handle_ssl_error(e)
 
 
-def authenticate_with_phase_api(host: str, auth_token: str, service_account_id: str, auth_type: str) -> Dict:
+def authenticate_service_account(host: str, auth_token: str, service_account_id: str, auth_type: str) -> Dict:
     """
-    Authenticate with the Phase API using various authentication providers.
+    Authenticate with the Phase Service Account using third-party authentication providers.
     
     :param host: Phase host
     :param auth_token: The authentication token (e.g., JWT, IAM token)

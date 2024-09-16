@@ -24,6 +24,8 @@ rbac:
 # Operator specific configuration
 operator:
   logLevel: INFO
+  env:
+    PHASE_VERIFY_SSL: True
   resources:
     limits:
       cpu: 200m

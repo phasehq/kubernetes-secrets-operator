@@ -5,7 +5,7 @@ description: A Helm chart for deploying the Phase Kubernetes Operator
 type: application
 
 # Version of the chart
-version: 1.2.2
+version: 1.2.3
 
 # Version of the application (operator) that is being deployed
 appVersion: "1.2.2"

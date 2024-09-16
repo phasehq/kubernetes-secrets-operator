@@ -22,3 +22,8 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         resources:
           {{- toYaml .Values.operator.resources | nindent 12 }}
+        env:
+          {{- range $key, $value := .Values.operator.env }}
+          - name: {{ $key }}
+            value: {{ $value | quote }}
+          {{- end }}

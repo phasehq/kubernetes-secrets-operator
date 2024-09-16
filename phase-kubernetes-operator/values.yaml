@@ -26,6 +26,7 @@ operator:
   logLevel: INFO
   env:
     PHASE_VERIFY_SSL: True
+    PHASE_DEBUG: False
   resources:
     limits:
       cpu: 200m

@@ -26,6 +26,7 @@ secrets:
   githubClientSecret: ""
   gitlabClientId: ""
   gitlabClientSecret: ""
+  gitlabAuthUrl: ""
 
 # Ingress settings
 ingress:

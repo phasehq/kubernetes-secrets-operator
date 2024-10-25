@@ -1,4 +1,4 @@
-{{- if not .Values.redis.external }}
+{{- if or (not .Values.global.external) (not .Values.redis.external) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

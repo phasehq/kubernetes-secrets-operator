@@ -1,0 +1,55 @@
+{{- if not .Values.global.external.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "phase.fullname" . }}-migrations
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+    job-name: {{ include "phase.fullname" . }}-migrations
+  annotations:
+    # Migrations are run after all other resources (including PostgreSQL and Redis) are created and ready
+    "helm.sh/hook": "post-install,post-upgrade"
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        {{- include "phase.selectorLabels" . | nindent 8 }}
+        app: migrations
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+      - name: check-db-ready
+        image: postgres:15.4-alpine3.17
+        command: ['sh', '-c', 
+          'echo "Waiting for database at {{ tpl .Values.database.host . }}:{{ .Values.database.port }}...";
+          until pg_isready -h {{ tpl .Values.database.host . }} -p {{ .Values.database.port }} -U {{ .Values.database.user }} -t 5;
+          do echo "Database is unavailable - sleeping 5s"; sleep 5; done;
+          echo "Database is ready!"']
+        # Set PGPASSWORD as DATABASE_PASSWORD
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "phase.fullname" . }}-secrets
+              key: DATABASE_PASSWORD
+      containers:
+      - name: migrations
+        image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"
+        imagePullPolicy: {{ .Values.app.backend.image.pullPolicy }}
+        command: ["python", "manage.py", "migrate"]
+        envFrom:
+        - configMapRef:
+            name: {{ include "phase.fullname" . }}-config
+        - secretRef:
+            name: {{ include "phase.fullname" . }}-secrets
+        env:
+        - name: ALLOWED_HOSTS
+          value: "$(HOST),{{ include "phase.fullname" . }}-worker"
+        - name: ALLOWED_ORIGINS
+          value: "$(HTTP_PROTOCOL)$(HOST)"
+        - name: SESSION_COOKIE_DOMAIN
+          value: "$(HOST)"
+{{- end }} 

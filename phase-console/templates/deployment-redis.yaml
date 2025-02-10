@@ -21,13 +21,28 @@ spec:
       - name: redis
         image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
         imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+        args:
+        {{- if .Values.secrets.redisPassword }}
+        - --requirepass
+        - $(REDIS_PASSWORD)
+        {{- end }}
+        env:
+        {{- if .Values.secrets.redisPassword }}
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "phase.fullname" . }}-secrets
+              key: REDIS_PASSWORD
+        {{- end }}
         ports:
-        - containerPort: 6379
+        - containerPort: {{ .Values.redis.service.port }}
+        {{- if .Values.redis.readinessProbe.enabled }}
         readinessProbe:
           tcpSocket:
-            port: 6379
+            port: {{ .Values.redis.service.port }}
           initialDelaySeconds: {{ .Values.redis.readinessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.redis.readinessProbe.periodSeconds }}
+        {{- end }}
         resources:
           {{- toYaml .Values.redis.resources | nindent 12 }}
 {{- end }}

@@ -14,5 +14,4 @@ data:
   DATABASE_USER: {{ .Values.database.user | quote }}
   REDIS_HOST: {{ tpl .Values.redis.host . | quote }}
   REDIS_PORT: {{ .Values.redis.port | quote }}
-  NEXT_TELEMETRY_DISABLED: {{ default "1" | quote }}
   SESSION_COOKIE_DOMAIN: {{ .Values.global.host | quote }}

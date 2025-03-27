@@ -39,6 +39,9 @@ CONFIG_FILE = os.path.join(PHASE_SECRETS_DIR, 'config.json') # Holds local user 
 
 PHASE_CLOUD_API_HOST = "https://console.phase.dev"
 
+
+TOKEN_CACHE_DIR = "/tmp/phase-token-cache"
+
 pss_user_pattern = re.compile(r"^pss_user:v(\d+):([a-fA-F0-9]{64}):([a-fA-F0-9]{64}):([a-fA-F0-9]{64}):([a-fA-F0-9]{64})$")
 pss_service_pattern = re.compile(r"^pss_service:v(\d+):([a-fA-F0-9]{64}):([a-fA-F0-9]{64}):([a-fA-F0-9]{64}):([a-fA-F0-9]{64})$")
 

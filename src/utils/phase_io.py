@@ -151,7 +151,7 @@ class Phase:
         return create_phase_secrets(self._token_type, self._app_secret.app_token, env_id, secrets, self._api_host)
 
 
-    def get(self, env_name: str, keys: List[str] = None, app_name: str = None, tag: str = None, path: str = '/') -> List[Dict]:
+    def get(self, env_name: str, keys: List[str] = None, app_name: str = None, app_id:str = None, tag: str = None, path: str = '/') -> List[Dict]:
         """
         Get secrets from Phase KMS based on key and environment, with support for personal overrides,
         optional tag matching, decrypting comments, and now including path support and key digest optimization.
@@ -172,7 +172,7 @@ class Phase:
             raise ValueError(f"Request failed with status code {user_response.status_code}: {user_response.text}")
 
         user_data = user_response.json()
-        app_name, app_id, env_name, env_id, public_key = phase_get_context(user_data, app_name=app_name, env_name=env_name)
+        app_name, app_id, env_name, env_id, public_key = phase_get_context(user_data, app_name=app_name, app_id=app_id, env_name=env_name)
 
         environment_key = self._find_matching_environment_key(user_data, env_id)
         if environment_key is None:

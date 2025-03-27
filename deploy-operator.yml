@@ -12,6 +12,7 @@ spec:
       labels:
         app: phase-kubernetes-operator
     spec:
+      serviceAccountName: phase-kubernetes-operator
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -19,3 +20,10 @@ spec:
       - name: phase-kubernetes-operator
         image: phasehq/kubernetes-operator:latest
         imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi

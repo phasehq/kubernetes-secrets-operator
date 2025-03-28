@@ -1,7 +1,7 @@
-import re
 from typing import Dict, List
 from exceptions import EnvironmentNotFoundException
 from utils.const import SECRET_REF_REGEX
+from utils.phase_io import Phase
 
 """
     Secret Referencing Syntax:
@@ -85,6 +85,7 @@ def resolve_secret_reference(ref: str, secrets_dict: Dict[str, Dict[str, Dict[st
     The function supports local, cross-environment, and cross-application secret references, allowing for flexible secret management.
     Local references are identified by the absence of a dot '.' in the reference string, implying the current environment.
     Cross-environment references include an environment name, separated by a dot from the rest of the path.
+    Cross-application references use '::' to separate the application name from the rest of the reference.
     
     Args:
         ref (str): The secret reference string, which could be a local, cross-environment, or cross-application reference.
@@ -96,6 +97,8 @@ def resolve_secret_reference(ref: str, secrets_dict: Dict[str, Dict[str, Dict[st
     Returns:
         str: The resolved secret value or the original reference if not resolved.
     """
+    original_ref = ref  # Store the original reference
+    app_name = current_application_name 
     env_name = current_env_name
     path = "/"  # Default root path
     key_name = ref

@@ -41,7 +41,7 @@ spec:
                 port:
                   number: 8000
           - path: /()(.*)
-            pathType: Prefix
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: {{ include "phase.fullname" $ }}-frontend

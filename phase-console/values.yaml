@@ -14,29 +14,8 @@ global:
 sso:
   providers: "google,github,gitlab"
 
-# Secrets (DO NOT use these in production, generate your own secure values)
 # Docs: https://docs.phase.dev/self-hosting/configuration/envars
-
-secrets:
-  nextauthSecret: "efd7e1e87edd416bc8ee28e7ee1d961ab7f4a4724ea4249d36f07c92616a322d"
-  secretKey: "ee728b91f92b48841a847fad61549f9f0b384f172b74bdcc859c1aadbfb633bd"
-  serverSecret: "896d2d2462ebd12683cee44d7808939217da961d1f15e69c977ae250f23a65c9"
-  databasePassword: "f5cc076c4788bba216567380247b394d71a2fa0c8970052005a824bad340c6be"
-  redisPassword: "98948797d7d3dc209bd3a6384a5e1438dc1e1cc3972305b9ca67c3b3c1b2bf01"
-  googleClientId: ""
-  googleClientSecret: ""
-  googleOidcClientId: ""
-  googleOidcClientSecret: ""
-  jumpcloudOidcClientId: ""
-  jumpcloudOidcClientSecret: ""
-  entraIdOidcTenantId: ""
-  entraIdOidcClientId: ""
-  entraIdOidcClientSecret: ""
-  githubClientId: ""
-  githubClientSecret: ""
-  gitlabClientId: ""
-  gitlabClientSecret: ""
-  gitlabAuthUrl: ""
+phaseSecrets: phase-console-secret
 
 # Ingress settings
 ingress:

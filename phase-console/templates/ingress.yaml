@@ -20,6 +20,11 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "128k"
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
+    {{- with .Values.ingress.annotations }}
+      {{- range $key, $value := . }}
+      {{ $key }}: {{ tpl $value $ | quote }}
+      {{- end }}
+    {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}

@@ -44,6 +44,7 @@ ingress:
   className: "nginx"
   # host: "your-domain.com"
   tls: []
+  annotations: {}
 
 # Cert manager settings
 certManager:

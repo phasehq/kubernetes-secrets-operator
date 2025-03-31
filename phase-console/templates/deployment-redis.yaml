@@ -31,7 +31,7 @@ spec:
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "phase.fullname" . }}-secrets
+              name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for Redis credentials." .Values.phaseSecrets }}
               key: REDIS_PASSWORD
         {{- end }}
         ports:

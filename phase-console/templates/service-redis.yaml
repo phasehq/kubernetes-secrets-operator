@@ -1,4 +1,4 @@
-{{- if .Values.redis.enabled }}
+{{- if not .Values.redis.external }}
 apiVersion: v1
 kind: Service
 metadata:

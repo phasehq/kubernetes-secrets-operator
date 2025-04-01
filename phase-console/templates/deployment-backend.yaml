@@ -27,7 +27,7 @@ spec:
         - configMapRef:
             name: {{ include "phase.fullname" . }}-config
         - secretRef:
-            name: {{ include "phase.fullname" . }}-secrets
+            name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for backend credentials." .Values.phaseSecrets }}
         env:
         - name: OAUTH_REDIRECT_URI
           value: "$(HTTP_PROTOCOL)$(HOST)"

@@ -22,18 +22,15 @@ spec:
         image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
         imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
         args:
-        {{- if .Values.secrets.redisPassword }}
         - --requirepass
         - $(REDIS_PASSWORD)
-        {{- end }}
         env:
-        {{- if .Values.secrets.redisPassword }}
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "phase.fullname" . }}-secrets
+              name: {{ .Values.phaseSecrets }}
               key: REDIS_PASSWORD
-        {{- end }}
+              optional: true
         ports:
         - containerPort: {{ .Values.redis.service.port }}
         {{- if .Values.redis.readinessProbe.enabled }}

@@ -24,21 +24,16 @@ spec:
         image: redis:alpine3.19
         command: ['sh', '-c', 
           'echo "Waiting for Redis at {{ tpl .Values.redis.host . }}:{{ .Values.redis.port }}...";
-          {{- if .Values.secrets.redisPassword }}
-          until redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }} -a "$REDIS_PASSWORD" ping;
-          {{- else }}
-          until redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }} ping;
-          {{- end }}
+          until redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }} -a "$REDIS_PASSWORD" ping 2>/dev/null || redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }} ping;
           do echo "Redis is unavailable - sleeping 5s"; sleep 5; done;
           echo "Redis is ready!"']
         env:
-        {{- if .Values.secrets.redisPassword }}
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for Redis credentials." .Values.phaseSecrets }}
+              name: {{ .Values.phaseSecrets }}
               key: REDIS_PASSWORD
-        {{- end }}
+              optional: true
       containers:
       - name: worker
         image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"

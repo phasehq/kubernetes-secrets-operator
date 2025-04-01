@@ -21,9 +21,7 @@ metadata:
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
     {{- with .Values.ingress.annotations }}
-      {{- range $key, $value := . }}
-      {{ $key }}: {{ tpl $value $ | quote }}
-      {{- end }}
+    {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   {{- if .Values.ingress.className }}

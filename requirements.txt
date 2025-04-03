@@ -1,7 +1,7 @@
 cffi==1.17.1
 requests==2.32.0
 PyNaCl==1.5.0
-kopf==1.36.2
+kopf==1.37.5
 kubernetes==28.1.0
 pytest==7.3.1
 pyyaml==6.0.1

@@ -21,9 +21,10 @@ spec:
       - name: redis
         image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
         imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
-        args:
+        command:
+        - redis-server
         - --requirepass
-        - $(REDIS_PASSWORD)
+        - "$(REDIS_PASSWORD)"
         env:
         - name: REDIS_PASSWORD
           valueFrom:

@@ -3,7 +3,7 @@ name: phase
 icon: https://phase.dev/apple-touch-icon.png
 description: A Helm chart for deploying the Phase Secrets Manager 
 type: application
-version: 0.3.0
+version: 0.3.1
 keywords:
   - phase
   - deployment

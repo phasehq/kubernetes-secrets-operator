@@ -30,7 +30,7 @@ spec:
         - configMapRef:
             name: {{ include "phase.fullname" . }}-config
         - secretRef:
-            name: {{ include "phase.fullname" . }}-secrets
+            name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for database credentials." .Values.phaseSecrets }}
         env:
         - name: POSTGRES_DB
           value: {{ .Values.database.name | quote }}
@@ -39,7 +39,7 @@ spec:
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "phase.fullname" . }}-secrets
+              name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for database credentials." .Values.phaseSecrets }}
               key: DATABASE_PASSWORD
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata

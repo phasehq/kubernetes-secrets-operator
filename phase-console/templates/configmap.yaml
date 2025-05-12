@@ -15,3 +15,8 @@ data:
   REDIS_HOST: {{ tpl .Values.redis.host . | quote }}
   REDIS_PORT: {{ .Values.redis.port | quote }}
   SESSION_COOKIE_DOMAIN: {{ .Values.global.host | quote }}
+  {{- if .Values.license }}
+  {{- if .Values.license.offline }}
+  PHASE_LICENSE_OFFLINE: {{ .Values.license.offline | quote }}
+  {{- end }}
+  {{- end }}

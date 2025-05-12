@@ -17,6 +17,12 @@ sso:
 # Docs: https://docs.phase.dev/self-hosting/configuration/envars
 phaseSecrets: phase-console-secret
 
+# License configuration
+license:
+  # Offline license key for enterprise deployments
+  # See PHASE_LICENSE_OFFLINE in: https://docs.phase.dev/self-hosting/configuration/envars#additional-environment-variables
+  offline: ""
+
 # Ingress settings
 ingress:
   enabled: true

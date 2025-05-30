@@ -48,12 +48,37 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Create the name of the service account to use
+Return the appropriate apiVersion for deployment.
+*/}}
+{{- define "phase.deployment.apiVersion" -}}
+{{- if semverCompare ">=1.9-0" .Capabilities.KubeVersion.GitVersion -}}
+{{- print "apps/v1" -}}
+{{- else -}}
+{{- print "extensions/v1beta1" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Service Account Name
+Determines the name of the service account to be used by deployments.
+If serviceAccount.name is set, it uses that value.
+Otherwise, if serviceAccount.create is true, it generates a name using the fullname.
+If serviceAccount.create is false and serviceAccount.name is not set, it defaults to "default",
+which means the pod will use the default service account in the namespace.
+However, our deployments will explicitly set serviceAccountName, so if neither
+serviceAccount.create nor serviceAccount.name is specified, it will effectively try to use
+a service account named "{{ include "phase.fullname" . }}-sa" if create is true, or just "default" if create is false and name is empty.
+We want our deployments to *always* specify a serviceAccountName if values.serviceAccount is configured.
 */}}
 {{- define "phase.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "phase.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
-{{- end }}
-{{- end }}
+{{- if .Values.serviceAccount.name -}}
+{{- .Values.serviceAccount.name | quote -}}
+{{- else -}}
+{{- if .Values.serviceAccount.create -}}
+{{- printf "%s-sa" (include "phase.fullname" .) | quote -}}
+{{- else -}}
+{{- "" -}}
+{{/* This will cause the deployments to omit serviceAccountName if not creating and no name is provided, defaulting to "default" SA in the namespace */}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

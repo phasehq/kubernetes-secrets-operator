@@ -134,6 +134,20 @@ redis:
       cpu: 100m
       memory: 256Mi
 
+# Specifies whether a service account should be created.
+serviceAccount:
+  create: false
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template (e.g., <release-name>-sa)
+  # If not set and create is false, the default service account in the namespace will be used.
+  # If set, this name will be used. If create is also true, this will be the name of the SA created.
+  # For IRSA, you would set create to false (if SA already exists) or true (if chart should manage it)
+  # and set this name to your existing/desired IRSA-enabled service account name.
+  name: "" # Example: "phase-backend-sa"
+  # Annotations to add to the service account (e.g., for AWS IRSA). More info: https://aws.amazon.com/blogs/containers/cross-account-iam-roles-for-kubernetes-service-accounts/
+  annotations: {}
+  #  "eks.amazonaws.com/role-arn": "arn:aws:iam::123456789012:role/phase-secrets-manager-role"
+
 # Autoscaling settings
 autoscaling:
   frontend:

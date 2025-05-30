@@ -19,6 +19,9 @@ spec:
         # Wait for the migrations to complete
         batch.kubernetes.io/job-completion: "{{ include "phase.fullname" . }}-migrations"
     spec:
+      {{- if include "phase.serviceAccountName" . }}
+      serviceAccountName: {{ include "phase.serviceAccountName" . }}
+      {{- end }}
       containers:
       - name: backend
         image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"

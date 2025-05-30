@@ -19,6 +19,9 @@ spec:
         # Wait for the migrations to complete
         batch.kubernetes.io/job-completion: "{{ include "phase.fullname" . }}-migrations"
     spec:
+      {{- if include "phase.serviceAccountName" . }}
+      serviceAccountName: {{ include "phase.serviceAccountName" . }}
+      {{- end }}
       initContainers:
       - name: wait-for-redis
         image: redis:alpine3.19

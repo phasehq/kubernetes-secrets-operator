@@ -1,38 +1,129 @@
 import kopf
-import base64
-import datetime
-import kubernetes.client
+from kubernetes import client
 from kubernetes.client.rest import ApiException
-from kubernetes.client import AppsV1Api
-from kubernetes.client import CoreV1Api
-from cmd.secrets.fetch import phase_secrets_fetch
-from utils.const import REDEPLOY_ANNOTATION
-from utils.misc import transform_name
+import base64
+from utils.auth.kubernetes import get_service_account_jwt
+from utils.network import authenticate_service_account
+from internals.secrets.fetch import phase_secrets_fetch
+from typing import Dict
+from utils.const import PHASE_CLOUD_API_HOST
+from utils.cache import get_cached_token, update_cached_token
+from utils.secrets.types import process_secrets
+from utils.secrets.write import create_secret
+from utils.workload.deploy import redeploy_affected_deployments
+import base64
+from kubernetes import client
+from typing import Dict
+import json
+import logging
 
+logging.basicConfig(level=logging.WARNING)
 
-@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=60)
+def get_phase_service_token(auth_config: Dict, phase_host: str, namespace: str, logger) -> str:
+    logger.debug(f"Entering get_phase_service_token. Auth config: {json.dumps(auth_config)}")
+    logger.debug(f"Phase host: {phase_host}, Namespace: {namespace}")
+
+    if 'serviceToken' in auth_config:
+        logger.debug("Using serviceToken authentication method")
+        service_token_secret_name = auth_config['serviceToken']['serviceTokenSecretReference']['secretName']
+        service_token_secret_namespace = auth_config['serviceToken']['serviceTokenSecretReference'].get('secretNamespace', namespace)
+        logger.debug(f"Secret name: {service_token_secret_name}, Secret namespace: {service_token_secret_namespace}")
+
+        try:
+            api_instance = client.CoreV1Api()
+            api_response = api_instance.read_namespaced_secret(service_token_secret_name, service_token_secret_namespace)
+            logger.debug("Successfully read the service token secret")
+            token = base64.b64decode(api_response.data['token']).decode('utf-8')
+            logger.debug("Successfully decoded the service token")
+            return token
+        except Exception as e:
+            logger.error(f"Error reading or decoding service token: {str(e)}")
+            raise
+    
+    elif 'kubernetesAuth' in auth_config:
+        logger.debug("Using kubernetesAuth authentication method")
+        kubernetes_auth = auth_config['kubernetesAuth']
+        service_account_id = kubernetes_auth['phaseServiceAccountId']
+        logger.debug(f"Service account ID: {service_account_id}")
+        
+        cached_token = get_cached_token(service_account_id)
+        if cached_token:
+            logger.debug("Using cached token")
+            return cached_token['token']
+
+        logger.debug("No valid cached token found. Proceeding with authentication.")
+
+        try:
+            jwt_token = get_service_account_jwt()
+            logger.debug("Successfully retrieved service account JWT")
+        except Exception as e:
+            logger.error(f"Error getting service account JWT: {str(e)}")
+            raise
+
+        try:
+            auth_response = authenticate_service_account(
+                host=phase_host,
+                auth_token=jwt_token,
+                service_account_id=service_account_id,
+                auth_type="kubernetes"
+            )
+            logger.debug(f"Received auth response: {json.dumps(auth_response)}")
+        except Exception as e:
+            logger.error(f"Error authenticating with Phase API: {str(e)}")
+            raise
+        
+        if not auth_response or 'token' not in auth_response:
+            logger.error(f"Invalid auth response: {json.dumps(auth_response)}")
+            raise Exception("Failed to authenticate with Phase API")
+        
+        try:
+            update_cached_token(service_account_id, {
+                'token': auth_response['token'],
+                'id': auth_response['id'],
+                'expiry': auth_response['expiry']
+            })
+            logger.debug("Successfully cached the new token")
+        except Exception as e:
+            logger.error(f"Error caching token: {str(e)}")
+            # Continue even if caching fails
+        
+        logger.info(f"Refreshed Phase service token for service account {service_account_id}")
+        return auth_response['token']
+    else:
+        logger.error(f"Invalid auth config: {json.dumps(auth_config)}")
+        raise Exception("No valid authentication method found in the spec")
+
+@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=10)
 def sync_secrets(spec, name, namespace, logger, **kwargs):
     try:
-        api_instance = CoreV1Api()
+        # Get Config
+        api_instance = client.CoreV1Api()
         managed_secret_references = spec.get('managedSecretReferences', [])
-        phase_host = spec.get('phaseHost', 'https://console.phase.dev')
+        phase_host = spec.get('phaseHost', PHASE_CLOUD_API_HOST)
         phase_app = spec.get('phaseApp')
+        phase_app_id = spec.get('phaseAppId')
         phase_app_env = spec.get('phaseAppEnv', 'production')
         phase_app_env_path = spec.get('phaseAppEnvPath', '/')
         phase_app_env_tag = spec.get('phaseAppEnvTag')
-        service_token_secret_name = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretName', 'phase-service-token')
 
-        api_response = api_instance.read_namespaced_secret(service_token_secret_name, namespace)
-        service_token = base64.b64decode(api_response.data['token']).decode('utf-8')
+        # Get Phase service token
+        auth_config = spec.get('authentication', {})
+        phase_service_token = get_phase_service_token(auth_config, phase_host, namespace, logger)
 
-        phase_secrets_dict = phase_secrets_fetch(
-            phase_service_token=service_token,
-            phase_service_host=phase_host,
-            phase_app=phase_app,
-            env_name=phase_app_env,
-            tags=phase_app_env_tag,
-            path=phase_app_env_path
-        )
+        # Fetch secrets from Phase
+        try:
+            phase_secrets_dict = phase_secrets_fetch(
+                phase_service_token=phase_service_token,
+                phase_service_host=phase_host,
+                phase_app=phase_app,
+                phase_app_id=phase_app_id,
+                env_name=phase_app_env,
+                tags=phase_app_env_tag,
+                path=phase_app_env_path
+            )
+        except ValueError as ve:
+            logger.warning(f"Failed to fetch secrets for PhaseSecret {name} in namespace {namespace}: {ve}")
+            return  # Exit the function early, but don't crash the operator
 
         secret_changed = False
         for secret_reference in managed_secret_references:
@@ -64,89 +155,6 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         logger.info(f"Secrets for PhaseSecret {name} have been successfully updated in namespace {namespace}")
 
     except ApiException as e:
-        logger.error(f"Failed to fetch secrets for PhaseSecret {name} in namespace {namespace}: {e}")
+        logger.error(f"Kubernetes API error when handling PhaseSecret {name} in namespace {namespace}: {e}")
     except Exception as e:
-        logger.error(f"Unexpected error when handling PhaseSecret {name} in namespace {namespace}: {e}")
-
-def redeploy_affected_deployments(namespace, affected_secrets, logger, api_instance):
-    try:
-        apps_v1_api = AppsV1Api(api_instance.api_client)
-        deployments = apps_v1_api.list_namespaced_deployment(namespace)
-        for deployment in deployments.items:
-            if should_redeploy(deployment, affected_secrets):
-                patch_deployment_for_redeploy(deployment, namespace, apps_v1_api, logger)
-    except ApiException as e:
-        logger.error(f"Error listing deployments in namespace {namespace}: {e}")
-
-def should_redeploy(deployment, affected_secrets):
-    if not (deployment.metadata.annotations and REDEPLOY_ANNOTATION in deployment.metadata.annotations):
-        return False
-
-    deployment_secrets = extract_deployment_secrets(deployment)
-    return any(secret in affected_secrets for secret in deployment_secrets)
-
-def extract_deployment_secrets(deployment):
-    secrets = []
-    for container in deployment.spec.template.spec.containers:
-        if container.env_from:
-            for env_from in container.env_from:
-                if env_from.secret_ref:
-                    secrets.append(env_from.secret_ref.name)
-    return secrets
-
-def patch_deployment_for_redeploy(deployment, namespace, apps_v1_api, logger):
-    try:
-        timestamp = datetime.datetime.utcnow().isoformat()
-        patch_body = {
-            "spec": {
-                "template": {
-                    "metadata": {
-                        "annotations": {
-                            "phase.autoredeploy.timestamp": timestamp
-                        }
-                    }
-                }
-            }
-        }
-        apps_v1_api.patch_namespaced_deployment(name=deployment.metadata.name, namespace=namespace, body=patch_body)
-        logger.info(f"Triggered redeployment of {deployment.metadata.name} in namespace {namespace}")
-    except ApiException as e:
-        logger.error(f"Failed to patch deployment {deployment.metadata.name} in namespace {namespace}: {e}")
-
-def process_secrets(fetched_secrets, processors, secret_type, name_transformer):
-    processed_secrets = {}
-    for key, value in fetched_secrets.items():
-        processor_info = processors.get(key, {})
-        processor_type = processor_info.get('type', 'plain')
-        as_name = processor_info.get('asName', key)  # Use asName for mapping
-
-        # Check and process the value based on the processor type
-        if processor_type == 'base64':
-            # Assume value is already base64 encoded; do not re-encode
-            processed_value = value
-        elif processor_type == 'plain':
-            # Base64 encode the value
-            processed_value = base64.b64encode(value.encode()).decode()
-        else:
-            # Default to plain processing if processor type is not recognized
-            processed_value = base64.b64encode(value.encode()).decode()
-
-        # Map the processed value to the asName
-        processed_secrets[as_name] = processed_value
-
-    return processed_secrets
-
-def create_secret(api_instance, secret_name, secret_namespace, secret_type, secret_data, logger):
-    try:
-        response = api_instance.create_namespaced_secret(
-            namespace=secret_namespace,
-            body=kubernetes.client.V1Secret(
-                metadata=kubernetes.client.V1ObjectMeta(name=secret_name),
-                type=secret_type,
-                data=secret_data
-            )
-        )
-        if response:
-            logger.info(f"Created secret {secret_name} in namespace {secret_namespace}")
-    except ApiException as e:
-        logger.error(f"Failed to create secret {secret_name} in namespace {secret_namespace}: {e}")
+        logger.error(f"Unexpected error when handling PhaseSecret {name} in namespace {namespace}: {e}", exc_info=True)

@@ -1,5 +1,4 @@
-# Use Python 3.9.18 Alpine image
-FROM python:3.11.7-alpine3.19
+FROM python:3.11.7-alpine3.20
 
 # Set the working directory in the container
 WORKDIR /app

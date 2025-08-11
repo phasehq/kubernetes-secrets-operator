@@ -1,11 +1,8 @@
 import os
-import base64
 import platform
-import subprocess
 import json
-from urllib.parse import urlparse
 from typing import Union, List
-from utils.const import __version__, PHASE_ENV_CONFIG, PHASE_CLOUD_API_HOST, PHASE_SECRETS_DIR, cross_env_pattern, local_ref_pattern
+from utils.const import __version__, PHASE_ENV_CONFIG, PHASE_CLOUD_API_HOST, PHASE_SECRETS_DIR
 
 
 def get_default_user_host() -> str:
@@ -84,7 +81,7 @@ def get_default_user_id(all_ids=False) -> Union[str, List[str]]:
         return config_data.get("default-user")
 
 
-def phase_get_context(user_data, app_name=None, env_name=None):
+def phase_get_context(user_data, app_name=None, env_name=None, include_timestamp=False):
     """
     Get the context (ID, name, and publicKey) for a specified application and environment or the default application and environment.
 
@@ -92,9 +89,10 @@ def phase_get_context(user_data, app_name=None, env_name=None):
     - user_data (dict): The user data from the API response.
     - app_name (str, optional): The name (or partial name) of the desired application.
     - env_name (str, optional): The name (or partial name) of the desired environment.
+    - include_timestamp (bool, optional): If True, also returns the environment's updated_at timestamp.
 
     Returns:
-    - tuple: A tuple containing the application's name, application's ID, environment's name, environment's ID, and publicKey.
+    - tuple: A tuple containing the application's name, application's ID, environment's name, environment's ID, publicKey, and optionally the updated_at timestamp.
 
     Raises:
     - ValueError: If no matching application or environment is found.
@@ -135,8 +133,11 @@ def phase_get_context(user_data, app_name=None, env_name=None):
         if not environment:
             raise ValueError(f"⚠️  Warning: The environment '{env_name}' either does not exist or you do not have access to it.")
 
-        # Return application name, application ID, environment name, environment ID, and public key
-        return (application["name"], application["id"], environment["environment"]["name"], environment["environment"]["id"], environment["identity_key"])
+        # Return application name, application ID, environment name, environment ID, public key, and optionally timestamp
+        if include_timestamp:
+            return (application["name"], application["id"], environment["environment"]["name"], environment["environment"]["id"], environment["identity_key"], environment["environment"]["updated_at"])
+        else:
+            return (application["name"], application["id"], environment["environment"]["name"], environment["environment"]["id"], environment["identity_key"])
     except StopIteration:
         raise ValueError("🔍 Application or environment not found.")
 

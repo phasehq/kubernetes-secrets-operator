@@ -92,7 +92,7 @@ class SyncStateCache:
         last_sync = self.get_last_sync(namespace, cr_name, cr_uid)
         
         if last_sync is None:
-            logger.info(f"No sync record found for {namespace}:{cr_name}:{cr_uid}, full sync needed")
+            logger.info(f"No last sync checkpoint found for {namespace}:{cr_name}:{cr_uid}, queueing sync")
             return True
         
         needs_sync = current_timestamp > last_sync

@@ -7,11 +7,13 @@ from kubernetes.client import AppsV1Api
 from kubernetes.client import CoreV1Api
 from cmd.secrets.fetch import phase_secrets_fetch
 from utils.const import REDEPLOY_ANNOTATION
-from utils.misc import transform_name
-
+from utils.sync_state_meta import sync_cache
+from utils.phase_io import Phase
+from utils.misc import phase_get_context
+from dateutil import parser
 
 @kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=60)
-def sync_secrets(spec, name, namespace, logger, **kwargs):
+def phase_secret_sync(spec, name, namespace, logger, uid, **kwargs):
     try:
         api_instance = CoreV1Api()
         managed_secret_references = spec.get('managedSecretReferences', [])
@@ -25,14 +27,62 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
         api_response = api_instance.read_namespaced_secret(service_token_secret_name, namespace)
         service_token = base64.b64decode(api_response.data['token']).decode('utf-8')
 
-        phase_secrets_dict = phase_secrets_fetch(
-            phase_service_token=service_token,
-            phase_service_host=phase_host,
-            phase_app=phase_app,
-            env_name=phase_app_env,
-            tags=phase_app_env_tag,
-            path=phase_app_env_path
+        # Initialize Phase client to fetch account access metadata and check timestamps
+        try:
+            phase = Phase(init=False, pss=service_token, host=phase_host)
+            
+            # Fetch account access metadata to get environment timestamps
+            user_data = phase.init()
+        except Exception as e:
+            logger.error(f"Failed to fetch user data from Phase API: {e}")
+            # On user data fetch failure, we can't determine if sync is needed, skip this cycle
+            return
+        
+        # Parse the app and environment context
+        try:
+            app_name, app_id, env_name, env_id, public_key, updated_at_str = phase_get_context(
+                user_data, app_name=phase_app, env_name=phase_app_env, include_timestamp=True
+            )
+            
+            # Parse the updated_at timestamp
+            target_env_updated_at = parser.parse(updated_at_str)
+        except ValueError as e:
+            logger.error(f"Failed to get app/environment context: {e}")
+            return
+        except Exception as e:
+            logger.error(f"Failed to parse timestamp for environment '{phase_app_env}': {e}")
+            return
+        
+        # Check if we need to sync based on timestamp
+        needs_sync = sync_cache.needs_sync(
+            namespace=namespace,
+            cr_name=name,
+            current_timestamp=target_env_updated_at,
+            cr_uid=uid
         )
+        
+        if not needs_sync:
+            logger.info(f"Environment '{phase_app_env}' for app '{phase_app}' has not been updated. No sync needed.")
+            return
+        
+        # Environment has been updated, fetch secrets
+        logger.info(f"Environment '{phase_app_env}' has been updated, fetching secrets")
+        
+        try:
+            # Fetch secrets from Phase API
+            phase_secrets_dict = phase_secrets_fetch(
+                phase_service_token=service_token,
+                phase_service_host=phase_host,
+                phase_app=phase_app,
+                env_name=phase_app_env,
+                tags=phase_app_env_tag,
+                path=phase_app_env_path
+            )
+        except Exception as e:
+            logger.error(f"Failed to fetch secrets from Phase API for app '{phase_app}' environment '{phase_app_env}': {e}")
+            # Don't update cache on fetch failure, retry on next cycle
+            return
+
 
         secret_changed = False
         for secret_reference in managed_secret_references:
@@ -61,6 +111,14 @@ def sync_secrets(spec, name, namespace, logger, **kwargs):
             affected_secrets = [ref['secretName'] for ref in managed_secret_references]
             redeploy_affected_deployments(namespace, affected_secrets, logger, api_instance)
 
+        # Update sync metadata timestamp
+        sync_cache.update_sync_time(
+            namespace=namespace,
+            cr_name=name,
+            timestamp=target_env_updated_at,
+            cr_uid=uid
+        )
+        
         logger.info(f"Secrets for PhaseSecret {name} have been successfully updated in namespace {namespace}")
 
     except ApiException as e:

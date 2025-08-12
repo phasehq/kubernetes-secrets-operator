@@ -23,8 +23,9 @@ def phase_secret_sync(spec, name, namespace, logger, uid, **kwargs):
         phase_app_env_path = spec.get('phaseAppEnvPath', '/')
         phase_app_env_tag = spec.get('phaseAppEnvTag')
         service_token_secret_name = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretName', 'phase-service-token')
+        service_token_secret_namespace = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretNamespace', namespace)
 
-        api_response = api_instance.read_namespaced_secret(service_token_secret_name, namespace)
+        api_response = api_instance.read_namespaced_secret(service_token_secret_name, service_token_secret_namespace)
         service_token = base64.b64decode(api_response.data['token']).decode('utf-8')
 
         # Initialize Phase client to fetch account access metadata and check timestamps

@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 """
 Persistent file-based state tracking in source environment that maps to custom resources.
 This state tracks the last sync time for each environment.
-The state is stored as JSON on /tmp/phase_sync_cache.json path and survives pod restarts.
+The state is stored as JSON on /tmp/phase_sync_status.json path and survives pod restarts.
 """
 
 class SyncStateCache:
@@ -18,7 +18,7 @@ class SyncStateCache:
     Cache key format: "{namespace}:{cr_name}:{cr_uid}"
     """
     
-    def __init__(self, cache_file_path: str = "/tmp/phase_sync_cache.json"):
+    def __init__(self, cache_file_path: str = "/tmp/phase_sync_status.json"):
         self.cache_file_path = cache_file_path
         self._ensure_cache_file_exists()
     

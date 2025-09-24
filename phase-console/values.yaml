@@ -99,6 +99,9 @@ database:
   port: "5432"
   name: "postgres-db-name"
   user: "postgres-user"
+  # Set SSL/TLS mode for Postgres connections made by initContainers and apps
+  # Accepted values include: disable, allow, prefer, require, verify-ca, verify-full
+  sslmode: ""
   image:
     repository: postgres
     tag: 15.4-alpine3.17
@@ -120,6 +123,10 @@ redis:
   external: false
   host: "{{ .Release.Name }}-redis"
   port: "6379"
+  # Enable TLS when connecting to external Redis (e.g., managed services)
+  ssl: false
+  # Optional user for Redis ACL (e.g., managed Redis/Valkey)
+  user: ""
   image:
     repository: redis
     tag: alpine3.19

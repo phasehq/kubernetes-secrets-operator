@@ -12,8 +12,17 @@ data:
   DATABASE_PORT: {{ .Values.database.port | quote }}
   DATABASE_NAME: {{ .Values.database.name | quote }}
   DATABASE_USER: {{ .Values.database.user | quote }}
+  {{- if .Values.database.sslmode }}
+  DATABASE_SSLMODE: {{ .Values.database.sslmode | quote }}
+  {{- end }}
   REDIS_HOST: {{ tpl .Values.redis.host . | quote }}
   REDIS_PORT: {{ .Values.redis.port | quote }}
+  {{- if .Values.redis.user }}
+  REDIS_USER: {{ .Values.redis.user | quote }}
+  {{- end }}
+  {{- if .Values.redis.ssl }}
+  REDIS_SSL: "True"
+  {{- end }}
   SESSION_COOKIE_DOMAIN: {{ .Values.global.host | quote }}
   {{- if .Values.license }}
   {{- if .Values.license.offline }}

@@ -21,6 +21,20 @@ spec:
     spec:
       restartPolicy: OnFailure
       initContainers:
+      - name: wait-for-redis
+        image: redis:alpine3.19
+        command: ['sh', '-c', 'echo "Waiting for Redis at {{ tpl .Values.redis.host . }}:{{ .Values.redis.port }}..."; AUTH_ARGS=""; {{- if .Values.redis.user }} AUTH_ARGS="--user \"${REDIS_USER}\""; {{- end }} until redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }}{{- if .Values.redis.ssl }} --tls{{- end }} $AUTH_ARGS -a "$REDIS_PASSWORD" ping 2>/dev/null || redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }}{{- if .Values.redis.ssl }} --tls{{- end }} $AUTH_ARGS ping; do echo "Redis is unavailable - sleeping 5s"; sleep 5; done; echo "Redis is ready!"']
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for database credentials." .Values.phaseSecrets }}
+              key: REDIS_PASSWORD
+              optional: true
+        {{- if .Values.redis.user }}
+        - name: REDIS_USER
+          value: {{ .Values.redis.user | quote }}
+        {{- end }}
       - name: check-db-ready
         image: postgres:15.4-alpine3.17
         command: ['sh', '-c', 
@@ -35,6 +49,10 @@ spec:
             secretKeyRef:
               name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for database credentials." .Values.phaseSecrets }}
               key: DATABASE_PASSWORD
+        {{- if .Values.database.sslmode }}
+        - name: PGSSLMODE
+          value: {{ .Values.database.sslmode | quote }}
+        {{- end }}
       containers:
       - name: migrations
         image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"

@@ -49,6 +49,10 @@ spec:
             secretKeyRef:
               name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for database credentials." .Values.phaseSecrets }}
               key: DATABASE_PASSWORD
+        {{- if .Values.database.sslmode }}
+        - name: PGSSLMODE
+          value: {{ .Values.database.sslmode | quote }}
+        {{- end }}
       containers:
       - name: migrations
         image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"

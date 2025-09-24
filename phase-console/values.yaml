@@ -123,6 +123,10 @@ redis:
   external: false
   host: "{{ .Release.Name }}-redis"
   port: "6379"
+  # Enable TLS when connecting to external Redis (e.g., managed services)
+  ssl: false
+  # Optional user for Redis ACL (e.g., managed Redis/Valkey)
+  user: ""
   image:
     repository: redis
     tag: alpine3.19

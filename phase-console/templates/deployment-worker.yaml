@@ -25,11 +25,7 @@ spec:
       initContainers:
       - name: wait-for-redis
         image: redis:alpine3.19
-        command: ['sh', '-c', 
-          'echo "Waiting for Redis at {{ tpl .Values.redis.host . }}:{{ .Values.redis.port }}...";
-          until redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }} -a "$REDIS_PASSWORD" ping 2>/dev/null || redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }} ping;
-          do echo "Redis is unavailable - sleeping 5s"; sleep 5; done;
-          echo "Redis is ready!"']
+        command: ['sh', '-c', 'echo "Waiting for Redis at {{ tpl .Values.redis.host . }}:{{ .Values.redis.port }}..."; AUTH_ARGS=""; {{- if .Values.redis.user }} AUTH_ARGS="--user \"${REDIS_USER}\""; {{- end }} until redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }}{{- if .Values.redis.ssl }} --tls{{- end }} $AUTH_ARGS -a "$REDIS_PASSWORD" ping 2>/dev/null || redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }}{{- if .Values.redis.ssl }} --tls{{- end }} $AUTH_ARGS ping; do echo "Redis is unavailable - sleeping 5s"; sleep 5; done; echo "Redis is ready!"']
         env:
         - name: REDIS_PASSWORD
           valueFrom:
@@ -37,6 +33,10 @@ spec:
               name: {{ .Values.phaseSecrets }}
               key: REDIS_PASSWORD
               optional: true
+        {{- if .Values.redis.user }}
+        - name: REDIS_USER
+          value: {{ .Values.redis.user | quote }}
+        {{- end }}
       containers:
       - name: worker
         image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"

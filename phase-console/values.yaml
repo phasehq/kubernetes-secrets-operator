@@ -99,6 +99,9 @@ database:
   port: "5432"
   name: "postgres-db-name"
   user: "postgres-user"
+  # Set SSL/TLS mode for Postgres connections made by initContainers and apps
+  # Accepted values include: disable, allow, prefer, require, verify-ca, verify-full
+  sslmode: ""
   image:
     repository: postgres
     tag: 15.4-alpine3.17

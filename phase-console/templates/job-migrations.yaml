@@ -7,7 +7,11 @@ metadata:
     job-name: {{ include "phase.fullname" . }}-migrations
   annotations:
     # Migrations are run after all other resources (including PostgreSQL and Redis) are created and ready
+    {{- if or .Values.global.external.enabled .Values.database.external .Values.redis.external }}
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    {{- else }}
     "helm.sh/hook": "post-install,post-upgrade"
+    {{- end }}
     "helm.sh/hook-weight": "1"
     "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
 spec:

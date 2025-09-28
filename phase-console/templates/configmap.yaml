@@ -4,6 +4,12 @@ metadata:
   name: {{ include "phase.fullname" . }}-config
   labels:
     {{- include "phase.labels" . | nindent 4 }}
+  {{- if or .Values.global.external.enabled .Values.database.external .Values.redis.external }}
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": "before-hook-creation"
+  {{- end }}
 data:
   HOST: {{ .Values.global.host | quote }}
   HTTP_PROTOCOL: {{ .Values.global.httpProtocol | quote }}

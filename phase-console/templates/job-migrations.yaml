@@ -6,8 +6,13 @@ metadata:
     {{- include "phase.labels" . | nindent 4 }}
     job-name: {{ include "phase.fullname" . }}-migrations
   annotations:
-    # Migrations are run after all other resources (including PostgreSQL and Redis) are created and ready
-    {{- if or .Values.global.external.enabled .Values.database.external .Values.redis.external }}
+    # Migrations hook behavior:
+    # - If `database.external = true`, the database is managed outside this chart and is
+    #   expected to exist already, so we run migrations as a *pre-install* hook and fail fast
+    #   before rolling out the rest of the stack.
+    # - If `database.external = false`, this chart creates the Postgres Deployment/PVC and
+    #   must wait for them to be ready, so we run migrations as a *post-install* hook.
+    {{- if .Values.database.external }}
     "helm.sh/hook": "pre-install,pre-upgrade"
     {{- else }}
     "helm.sh/hook": "post-install,post-upgrade"

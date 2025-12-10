@@ -1,4 +1,4 @@
-{{- if not .Values.database.external }}
+{{- if and (not .Values.database.external) (not .Values.migration.freshInstall) }}
 apiVersion: v1
 kind: Service
 metadata:

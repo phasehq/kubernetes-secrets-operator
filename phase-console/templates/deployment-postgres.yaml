@@ -1,4 +1,14 @@
-{{- if or (not .Values.global.external) (not .Values.database.external) }}
+{{- /* 
+   This Deployment is the legacy/simple Postgres deployment. 
+   It should ONLY be deployed if:
+   1. The user is NOT performing a 'fresh install' (which implies using the new subchart/external DB directly).
+   2. The user has NOT configured an external database (`database.external: true`).
+   3. The user has NOT configured global external services (`global.external.enabled: true`).
+   4. AND:
+      - The PostgreSQL subchart is DISABLED (so this is the primary DB).
+      - OR The migration mode is ENABLED (so we need this Old DB running to migrate data from it).
+*/ -}}
+{{- if and (not .Values.migration.freshInstall) (not .Values.database.external) (not .Values.global.external.enabled) (or (not .Values.postgresql.enabled) .Values.migration.enabled) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

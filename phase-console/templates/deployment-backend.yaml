@@ -1,3 +1,20 @@
+{{- /*
+  Backend Deployment
+  ------------------
+  This deployment runs the core application logic (Python/Django).
+  
+  Production Readiness Tips:
+  1. Resources: Ensure 'requests' and 'limits' are set in values.yaml to prevent OOMKilled and ensure fair scheduling.
+  2. Probes: Liveness and Readiness probes are configured but ensure timeouts match your application's startup time.
+  3. Security: We recommend adding a securityContext to run as non-root.
+     Example:
+       securityContext:
+         runAsUser: 1000
+         runAsGroup: 3000
+         fsGroup: 2000
+  4. HPA: HorizontalPodAutoscaler is available (see hpa.yaml). Ensure 'resources.requests.cpu' is set for it to work.
+*/ -}}
+{{- include "phase.validateMigration" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,6 +49,11 @@ spec:
         - secretRef:
             name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for backend credentials." .Values.phaseSecrets }}
         env:
+        # Override DATABASE_HOST if using the new PostgreSQL subchart
+        {{- if .Values.postgresql.enabled }}
+        - name: DATABASE_HOST
+          value: {{ include "phase.fullname" . }}-postgresql
+        {{- end }}
         - name: OAUTH_REDIRECT_URI
           value: "$(HTTP_PROTOCOL)$(HOST)"
         - name: ALLOWED_HOSTS

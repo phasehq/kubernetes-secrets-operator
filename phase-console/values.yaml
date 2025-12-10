@@ -11,8 +11,56 @@ global:
   external:
     enabled: false  # Set to true to use external managed services
 
+
+# ------------------------------------------------------------------------------
+# SSO Configuration
+# ------------------------------------------------------------------------------
+# Comma-separated list of SSO providers to enable.
+# Supported values: "google", "github", "gitlab"
 sso:
   providers: "google,github,gitlab"
+
+# ------------------------------------------------------------------------------
+# Migration Configuration
+# ------------------------------------------------------------------------------
+# Flags to control the upgrade path for the database.
+# See specific scenarios below:
+
+migration:
+  # Enable this flag to automatically migrate data from the old Postgres deployment to the new StatefulSet.
+  enabled: false
+  # Enable this flag if this is a fresh install or you don't care about existing data.
+  freshInstall: false
+  # The host of the old Postgres service (deployed via Deployment)
+  oldServiceHost: "phase-postgres"
+  # The name of the secret containing credentials for the old database.
+  # Usually this is the same as the current phaseSecrets.
+  oldSecretName: "" 
+
+# Postgres Subchart Configuration (Bitnami)
+postgresql:
+  # Enabled by default, but can be disabled if using external database.
+  enabled: true
+  auth:
+    database: "postgres-db-name"
+    username: "postgres-user"
+    # Password will be populated from existing secrets if possible, or generated.
+    # We recommend using existing secret via existingSecret
+    existingSecret: "phase-console-secret"
+    secretKeys:
+      adminPasswordKey: "DATABASE_PASSWORD"
+      userPasswordKey: "DATABASE_PASSWORD"
+      replicationPasswordKey: "DATABASE_PASSWORD"
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi
+      accessMode: ReadWriteOnce
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+  architecture: standalone
 
 # Docs: https://docs.phase.dev/self-hosting/configuration/envars
 phaseSecrets: phase-console-secret
@@ -172,3 +220,18 @@ autoscaling:
     minReplicas: 1
     maxReplicas: 10
     targetCPUUtilizationPercentage: 80
+
+# ------------------------------------------------------------------------------
+# Pod Disruption Budget (PDB)
+# ------------------------------------------------------------------------------
+# define PDBs to ensure HA during voluntary disruptions (e.g. node drains).
+podDisruptionBudget:
+  frontend:
+    enabled: false
+    minAvailable: 1
+  backend:
+    enabled: false
+    minAvailable: 1
+  worker:
+    enabled: false
+    minAvailable: 1

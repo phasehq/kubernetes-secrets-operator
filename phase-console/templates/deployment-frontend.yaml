@@ -1,3 +1,13 @@
+{{- /*
+  Frontend Deployment
+  -------------------
+  This deployment runs the Next.js/React frontend.
+
+  Production Readiness Tips:
+  1. Replicas: For high availability, set replicaCount > 1 and ensure PDB is enabled.
+  2. Security: Recommended to run as non-root user.
+  3. Caching: Ensure your ingress/CDN handles static asset caching correctly given the cache-busting filenames.
+*/ -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

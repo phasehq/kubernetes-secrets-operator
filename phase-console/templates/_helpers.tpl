@@ -82,3 +82,13 @@ We want our deployments to *always* specify a serviceAccountName if values.servi
 {{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Checks for migration validation.
+Fails the Helm upgrade if the user has not acknowledged the breaking change.
+*/}}
+{{- define "phase.validateMigration" -}}
+{{- if and (not .Values.migration.enabled) (not .Values.migration.freshInstall) -}}
+{{- fail (printf "\n********************************************************************************\n*                                 ERROR                                        *\n********************************************************************************\n* This release (v2.0.0) introduces a BREAKING CHANGE to the Database architecture.\n* \n* YOU MUST CHOOSE ONE OF THE FOLLOWING:\n* \n* 1. MIGRATE DATA (Upgrade):\n*    Set `migration.enabled=true` to automatically migrate data from the old deployment.\n* \n* 2. FRESH INSTALL (New Users / Reset):\n*    Set `migration.freshInstall=true` to start with a fresh database.\n* \n* See MIGRATION.md for full details.\n********************************************************************************") -}}
+{{- end -}}
+{{- end -}}

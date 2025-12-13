@@ -212,6 +212,7 @@ autoscaling:
     targetCPUUtilizationPercentage: 80
   backend:
     enabled: false
+    # HPA requires resources.requests.cpu to be set in the 'requests' section below.
     minReplicas: 1
     maxReplicas: 10
     targetCPUUtilizationPercentage: 80
@@ -235,3 +236,6 @@ podDisruptionBudget:
   worker:
     enabled: false
     minAvailable: 1
+
+# Production Note: Enable PDBs only if replicaCount > 1 to avoid downtime during node drains.
+# If replicaCount is 1, a PDB with minAvailable: 1 will prevent node drains entirely.

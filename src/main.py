@@ -17,7 +17,12 @@ def phase_secret_sync(spec, name, namespace, logger, uid, stopped, **kwargs):
     while not stopped:
         polling_interval = spec.get('pollingInterval', 60)
         
-        _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs)
+        try:
+            _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs)
+        except Exception as e:
+            logger.error(
+                f"Unexpected error in daemon while syncing PhaseSecret {name} in namespace {namespace}: {e}"
+            )
         
         # Wait for the next poll
         if stopped.wait(polling_interval):

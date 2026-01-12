@@ -15,7 +15,7 @@ from dateutil import parser
 @kopf.daemon('secrets.phase.dev', 'v1alpha1', 'phasesecrets')
 def phase_secret_sync(spec, name, namespace, logger, uid, stopped, **kwargs):
     while not stopped:
-        polling_interval = spec.get('pollingInterval', 60)
+        polling_interval = max(spec.get('pollingInterval', 60), 5)
         
         try:
             _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs)

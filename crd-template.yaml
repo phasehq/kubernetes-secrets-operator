@@ -126,6 +126,7 @@ spec:
                   description: Interval at which to poll for secret updates.
                   type: integer
                   default: 60
+                  minimum: 5
               required:
                 - phaseApp
                 - managedSecretReferences

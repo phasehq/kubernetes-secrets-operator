@@ -157,7 +157,6 @@ spec:
                       observedGeneration:
                         description: Generation that the condition was set based upon.
                         type: integer
-                        format: int64
                         minimum: 0
                       reason:
                         description: Programmatic identifier for the reason of the condition's last transition.

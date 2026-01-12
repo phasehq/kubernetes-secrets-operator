@@ -12,8 +12,18 @@ from utils.phase_io import Phase
 from utils.misc import phase_get_context
 from dateutil import parser
 
-@kopf.timer('secrets.phase.dev', 'v1alpha1', 'phasesecrets', interval=60)
-def phase_secret_sync(spec, name, namespace, logger, uid, **kwargs):
+@kopf.daemon('secrets.phase.dev', 'v1alpha1', 'phasesecrets')
+def phase_secret_sync(spec, name, namespace, logger, uid, stopped, **kwargs):
+    while not stopped:
+        polling_interval = spec.get('pollingInterval', 60)
+        
+        _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs)
+        
+        # Wait for the next poll
+        if stopped.wait(polling_interval):
+            break
+
+def _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs):
     try:
         api_instance = CoreV1Api()
         managed_secret_references = spec.get('managedSecretReferences', [])

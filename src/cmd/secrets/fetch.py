@@ -31,14 +31,14 @@ def phase_secrets_fetch(phase_service_token=None, phase_service_host=None, env_n
 
             except ValueError as e:
                 logger.error(f"Failed to fetch secrets: {e}")
-                raise e
+                raise
 
         # Create a dictionary with keys and resolved values outside the loop
         all_secrets_dict = {secret["key"]: secret["value"] for secret in resolved_secrets}
 
     except Exception as e:
         logger.error(f"Failed to fetch secrets: {e}")
-        raise e
+        raise
 
     # Return secrets as a dictionary, ensure this is outside the try-except block
     return all_secrets_dict

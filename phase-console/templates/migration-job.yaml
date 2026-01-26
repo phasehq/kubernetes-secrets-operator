@@ -1,65 +1,346 @@
-{{- if .Values.migration.enabled -}}
+{{- if .Values.migration.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ include "phase.fullname" . }}-migration
   labels:
+    app: migration
     {{- include "phase.labels" . | nindent 4 }}
-  annotations:
-    "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-delete-policy": before-hook-creation
 spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: {{ .Values.migration.timeout | default 1800 }}
   template:
     metadata:
       labels:
-        {{- include "phase.selectorLabels" . | nindent 8 }}
         app: migration
+        {{- include "phase.labels" . | nindent 8 }}
     spec:
-      restartPolicy: OnFailure
+      serviceAccountName: {{ include "phase.fullname" . }}-migration
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
       containers:
       - name: migration
-        image: postgres:15.4-alpine3.17
+        image: "{{ .Values.migration.image | default "postgres:15-alpine" }}"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: var-run
+          mountPath: /var/run
         env:
-        - name: OLD_DB_HOST
-          value: {{ .Values.migration.oldServiceHost | quote }}
-        - name: NEW_DB_HOST
-          value: {{ include "phase.fullname" . }}-postgresql
         - name: PGPASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ .Values.migration.oldSecretName | default .Values.phaseSecrets }}
-              key: DATABASE_PASSWORD
-        - name: DATABASE_USER
-          value: {{ .Values.database.user | quote }}
-        - name: DATABASE_NAME
-          value: {{ .Values.database.name | quote }}
-        command: ["/bin/sh", "-c"]
-        args:
-          - |
-            echo "Starting migration..."
-            echo "Waiting for New DB ($NEW_DB_HOST) to be ready..."
-            until pg_isready -h $NEW_DB_HOST -U $DATABASE_USER; do 
-              echo "Waiting for new DB..."
-              sleep 2
-            done
+              name: {{ .Values.migration.oldSecretName | default (include "phase.fullname" . | printf "%s-secret") }}
+              key: {{ .Values.migration.oldSecretPasswordKey | default "DATABASE_PASSWORD" }}
+        - name: PGPASSWORD_NEW
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.migration.newSecretName | default (include "phase.fullname" . | printf "%s-secret") }}
+              key: {{ .Values.migration.newSecretPasswordKey | default "DATABASE_PASSWORD" }}
+        - name: OLD_DB_HOST
+          value: {{ .Values.migration.oldServiceHost | default "phase-postgres" }}
+        - name: OLD_DB_PORT
+          value: {{ .Values.migration.oldServicePort | default 5432 | quote }}
+        - name: OLD_DB_USER
+          value: {{ .Values.postgresql.auth.username | default "phase-console" }}
+        - name: OLD_DB_NAME
+          value: {{ .Values.postgresql.auth.database | default "phase-console" }}
+        - name: NEW_DB_HOST
+          value: {{ include "phase.fullname" . }}-postgresql
+        - name: NEW_DB_PORT
+          value: "5432"
+        - name: NEW_DB_USER
+          value: {{ .Values.postgresql.auth.username | default "phase-console" }}
+        - name: NEW_DB_NAME
+          value: {{ .Values.postgresql.auth.database | default "phase-console" }}
+        - name: MIGRATION_TIMEOUT
+          value: {{ .Values.migration.timeout | default 1800 | quote }}
+        - name: VERIFY_ENABLED
+          value: {{ .Values.migration.verificationEnabled | default true | quote }}
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -euo pipefail
+          
+          # Color codes for output
+          RED='\033[0;31m'
+          GREEN='\033[0;32m'
+          YELLOW='\033[1;33m'
+          BLUE='\033[0;34m'
+          NC='\033[0m' # No Color
+          
+          # Logging functions
+          log_info() { echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} INFO: $*"; }
+          log_success() { echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} SUCCESS: $*"; }
+          log_warn() { echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} WARNING: $*"; }
+          log_error() { echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} ERROR: $*"; }
+          
+          # Trap errors
+          trap 'log_error "Migration failed at line $LINENO"; exit 1' ERR
+          
+          log_info "========================================"
+          log_info "Phase Database Migration Starting"
+          log_info "========================================"
+          log_info "Source: $OLD_DB_USER@$OLD_DB_HOST:$OLD_DB_PORT/$OLD_DB_NAME"
+          log_info "Target: $NEW_DB_USER@$NEW_DB_HOST:$NEW_DB_PORT/$NEW_DB_NAME"
+          
+          # ========================================
+          # STEP 1: Validate Connections
+          # ========================================
+          log_info ""
+          log_info "STEP 1: Validating connections..."
+          
+          # Check old database
+          RETRY_COUNT=0
+          MAX_RETRIES=30
+          RETRY_DELAY=1
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if pg_isready -h "$OLD_DB_HOST" -p "$OLD_DB_PORT" -U "$OLD_DB_USER" 2>/dev/null; then
+              log_success "Old database connection verified"
+              break
+            fi
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+              log_warn "Old database not ready (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            fi
+          done
+          
+          if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+            log_error "Failed to connect to old database after $MAX_RETRIES attempts"
+            exit 1
+          fi
+          
+          # Check new database
+          RETRY_COUNT=0
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if pg_isready -h "$NEW_DB_HOST" -p "$NEW_DB_PORT" -U "$NEW_DB_USER" 2>/dev/null; then
+              log_success "New database connection verified"
+              break
+            fi
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+              log_warn "New database not ready (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            fi
+          done
+          
+          if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+            log_error "Failed to connect to new database after $MAX_RETRIES attempts"
+            exit 1
+          fi
+          
+          # ========================================
+          # STEP 2: Pre-migration Validation
+          # ========================================
+          log_info ""
+          log_info "STEP 2: Pre-migration validation..."
+          
+          # Count tables in old database
+          export PGPASSWORD
+          OLD_TABLE_COUNT=$(psql -h "$OLD_DB_HOST" -p "$OLD_DB_PORT" -U "$OLD_DB_USER" -d "$OLD_DB_NAME" -tc \
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" | tr -d ' ')
+          
+          log_info "Old database: $OLD_TABLE_COUNT tables found"
+          
+          if [ "$OLD_TABLE_COUNT" -eq 0 ]; then
+            log_warn "No tables found in old database. Migration might not be needed."
+          fi
+          
+          # Get old database size
+          OLD_DB_SIZE=$(psql -h "$OLD_DB_HOST" -p "$OLD_DB_PORT" -U "$OLD_DB_USER" -d "$OLD_DB_NAME" -tc \
+            "SELECT pg_size_pretty(pg_database_size('$OLD_DB_NAME'));" | tr -d ' ')
+          
+          log_info "Old database size: $OLD_DB_SIZE"
+          
+          # ========================================
+          # STEP 3: Execute Migration
+          # ========================================
+          log_info ""
+          log_info "STEP 3: Executing migration..."
+          log_info "Using binary dump format for safety and performance"
+          
+          # Create temporary directory for dump
+          DUMP_DIR="/tmp/pg_migration"
+          mkdir -p "$DUMP_DIR"
+          DUMP_FILE="$DUMP_DIR/database.dump"
+          
+          # Dump old database
+          log_info "Creating database dump..."
+          if timeout "$MIGRATION_TIMEOUT" pg_dump -h "$OLD_DB_HOST" -p "$OLD_DB_PORT" \
+            -U "$OLD_DB_USER" -d "$OLD_DB_NAME" \
+            --format=custom --exit-on-error \
+            -v > "$DUMP_FILE" 2>&1; then
+            log_success "Database dump completed"
+          else
+            log_error "Database dump failed or timed out"
+            exit 1
+          fi
+          
+          # Check dump file size
+          DUMP_SIZE=$(du -h "$DUMP_FILE" | cut -f1)
+          log_info "Dump file size: $DUMP_SIZE"
+          
+          # Restore to new database
+          log_info "Restoring database to new instance..."
+          export PGPASSWORD="$PGPASSWORD_NEW"
+          
+          if timeout "$MIGRATION_TIMEOUT" pg_restore -h "$NEW_DB_HOST" -p "$NEW_DB_PORT" \
+            -U "$NEW_DB_USER" -d "$NEW_DB_NAME" \
+            --exit-on-error --verbose \
+            "$DUMP_FILE" 2>&1; then
+            log_success "Database restoration completed"
+          else
+            log_error "Database restoration failed or timed out"
+            exit 1
+          fi
+          
+          # Clean up dump file
+          rm -f "$DUMP_FILE"
+          
+          # ========================================
+          # STEP 4: Post-migration Verification
+          # ========================================
+          if [ "$VERIFY_ENABLED" = "true" ] || [ "$VERIFY_ENABLED" = "True" ]; then
+            log_info ""
+            log_info "STEP 4: Post-migration verification..."
             
-            echo "Waiting for Old DB ($OLD_DB_HOST) to be ready..."
-            until pg_isready -h $OLD_DB_HOST -U $DATABASE_USER; do 
-              echo "Waiting for old DB..."
-              sleep 2
-            done
-
-            echo "Dumping data from $OLD_DB_HOST..."
-            # We ignore errors on drop database because it might not exist or we might not have permission, 
-            # but we want to ensure we overwrite/fill the new DB.
-            # Actually, standard pg_dump | psql is better.
+            # Count tables in new database
+            NEW_TABLE_COUNT=$(psql -h "$NEW_DB_HOST" -p "$NEW_DB_PORT" -U "$NEW_DB_USER" -d "$NEW_DB_NAME" -tc \
+              "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" | tr -d ' ')
             
-            pg_dump -h $OLD_DB_HOST -U $DATABASE_USER $DATABASE_NAME | psql -h $NEW_DB_HOST -U $DATABASE_USER $DATABASE_NAME
+            log_info "New database: $NEW_TABLE_COUNT tables found"
             
-            if [ $? -eq 0 ]; then
-              echo "Migration successful."
-            else
-              echo "Migration failed."
+            # Verify table count matches
+            if [ "$OLD_TABLE_COUNT" -ne "$NEW_TABLE_COUNT" ]; then
+              log_error "Table count mismatch! Old: $OLD_TABLE_COUNT, New: $NEW_TABLE_COUNT"
               exit 1
             fi
-{{- end -}}
+            log_success "Table count verified"
+            
+            # Verify schemas match
+            log_info "Verifying database schema..."
+            OLD_SCHEMA=$(psql -h "$OLD_DB_HOST" -p "$OLD_DB_PORT" -U "$OLD_DB_USER" -d "$OLD_DB_NAME" -tc \
+              "SELECT md5(array_agg(tablename)::text) FROM pg_tables WHERE schemaname='public';" | tr -d ' ')
+            
+            NEW_SCHEMA=$(psql -h "$NEW_DB_HOST" -p "$NEW_DB_PORT" -U "$NEW_DB_USER" -d "$NEW_DB_NAME" -tc \
+              "SELECT md5(array_agg(tablename)::text) FROM pg_tables WHERE schemaname='public';" | tr -d ' ')
+            
+            if [ "$OLD_SCHEMA" != "$NEW_SCHEMA" ]; then
+              log_warn "Schema hash mismatch, but migration completed. Check manually if needed."
+            else
+              log_success "Database schema verified"
+            fi
+            
+            # Verify indexes
+            log_info "Verifying indexes..."
+            OLD_INDEXES=$(psql -h "$OLD_DB_HOST" -p "$OLD_DB_PORT" -U "$OLD_DB_USER" -d "$OLD_DB_NAME" -tc \
+              "SELECT count(*) FROM pg_indexes WHERE schemaname='public';" | tr -d ' ')
+            
+            NEW_INDEXES=$(psql -h "$NEW_DB_HOST" -p "$NEW_DB_PORT" -U "$NEW_DB_USER" -d "$NEW_DB_NAME" -tc \
+              "SELECT count(*) FROM pg_indexes WHERE schemaname='public';" | tr -d ' ')
+            
+            if [ "$OLD_INDEXES" -ne "$NEW_INDEXES" ]; then
+              log_warn "Index count mismatch! Old: $OLD_INDEXES, New: $NEW_INDEXES"
+            else
+              log_success "Indexes verified"
+            fi
+            
+            # Get new database size
+            NEW_DB_SIZE=$(psql -h "$NEW_DB_HOST" -p "$NEW_DB_PORT" -U "$NEW_DB_USER" -d "$NEW_DB_NAME" -tc \
+              "SELECT pg_size_pretty(pg_database_size('$NEW_DB_NAME'));" | tr -d ' ')
+            
+            log_info "New database size: $NEW_DB_SIZE"
+            
+          else
+            log_warn "Post-migration verification disabled"
+          fi
+          
+          # ========================================
+          # Final Summary
+          # ========================================
+          log_info ""
+          log_info "========================================"
+          log_success "Database migration completed successfully!"
+          log_info "========================================"
+          log_info "Tables migrated: $OLD_TABLE_COUNT"
+          log_info "Source size: $OLD_DB_SIZE"
+          log_info "Target size: $NEW_DB_SIZE"
+          log_info "Migration time: $(date +'%Y-%m-%d %H:%M:%S')"
+          log_info ""
+          log_info "Next steps:"
+          log_info "1. Verify application can connect to new database"
+          log_info "2. Run smoke tests against new database"
+          log_info "3. Monitor application logs for any issues"
+          log_info "4. Keep old database as backup until confident"
+          log_info ""
+          
+          exit 0
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: var-run
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "phase.fullname" . }}-migration
+  labels:
+    app: migration
+    {{- include "phase.labels" . | nindent 4 }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phase.fullname" . }}-migration
+  labels:
+    app: migration
+    {{- include "phase.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+  resourceNames:
+  - {{ .Values.migration.oldSecretName | default (include "phase.fullname" . | printf "%s-secret") }}
+  - {{ .Values.migration.newSecretName | default (include "phase.fullname" . | printf "%s-secret") }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phase.fullname" . }}-migration
+  labels:
+    app: migration
+    {{- include "phase.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phase.fullname" . }}-migration
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phase.fullname" . }}-migration
+  namespace: {{ .Release.Namespace }}
+
+{{- end }}

@@ -1,0 +1,65 @@
+{{- if .Values.migration.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "phase.fullname" . }}-migration
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "phase.selectorLabels" . | nindent 8 }}
+        app: migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: migration
+        image: postgres:15.4-alpine3.17
+        env:
+        - name: OLD_DB_HOST
+          value: {{ .Values.migration.oldServiceHost | quote }}
+        - name: NEW_DB_HOST
+          value: {{ include "phase.fullname" . }}-postgresql
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.migration.oldSecretName | default .Values.phaseSecrets }}
+              key: DATABASE_PASSWORD
+        - name: DATABASE_USER
+          value: {{ .Values.database.user | quote }}
+        - name: DATABASE_NAME
+          value: {{ .Values.database.name | quote }}
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Starting migration..."
+            echo "Waiting for New DB ($NEW_DB_HOST) to be ready..."
+            until pg_isready -h $NEW_DB_HOST -U $DATABASE_USER; do 
+              echo "Waiting for new DB..."
+              sleep 2
+            done
+            
+            echo "Waiting for Old DB ($OLD_DB_HOST) to be ready..."
+            until pg_isready -h $OLD_DB_HOST -U $DATABASE_USER; do 
+              echo "Waiting for old DB..."
+              sleep 2
+            done
+
+            echo "Dumping data from $OLD_DB_HOST..."
+            # We ignore errors on drop database because it might not exist or we might not have permission, 
+            # but we want to ensure we overwrite/fill the new DB.
+            # Actually, standard pg_dump | psql is better.
+            
+            pg_dump -h $OLD_DB_HOST -U $DATABASE_USER $DATABASE_NAME | psql -h $NEW_DB_HOST -U $DATABASE_USER $DATABASE_NAME
+            
+            if [ $? -eq 0 ]; then
+              echo "Migration successful."
+            else
+              echo "Migration failed."
+              exit 1
+            fi
+{{- end -}}

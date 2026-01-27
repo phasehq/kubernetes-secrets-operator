@@ -96,6 +96,56 @@ spec:
                           - "kubernetes.io/basic-auth"
                           - "kubernetes.io/ssh-auth"
                           - "bootstrap.kubernetes.io/token"
+                      template:
+                        description: Template for the managed Kubernetes Secret. Follows External Secrets Operator patterns.
+                        type: object
+                        properties:
+                          metadata:
+                            description: Metadata to apply to the managed Secret. User-defined labels and annotations are merged with operator-managed metadata.
+                            type: object
+                            properties:
+                              labels:
+                                description: |
+                                  Labels to attach to the managed Secret. 
+                                  User-defined labels are merged with operator-managed labels:
+                                  - app.kubernetes.io/managed-by: phase-secrets-operator (always set)
+                                  - secrets.phase.dev/phasesecret: <cr-name> (always set)
+                                  
+                                  Reserved namespace 'secrets.phase.dev/*' cannot be overridden.
+                                  
+                                  Common use cases:
+                                  - ArgoCD: argocd.argoproj.io/secret-type: cluster
+                                  - Cert-Manager: cert-manager.io/certificate-name: <name>
+                                  - Environment tagging: environment: production
+                                type: object
+                                additionalProperties:
+                                  type: string
+                                  maxLength: 63
+                                  pattern: '^([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]$'
+                                example:
+                                  argocd.argoproj.io/secret-type: cluster
+                                  environment: production
+                                  team: platform
+                              annotations:
+                                description: |
+                                  Annotations to attach to the managed Secret.
+                                  User-defined annotations are merged with operator-managed annotations:
+                                  - secrets.phase.dev/last-sync: <timestamp> (always set)
+                                  
+                                  Annotations can contain arbitrary metadata and are not subject to the same
+                                  restrictions as labels. Maximum total size is 256KB.
+                                  
+                                  Common use cases:
+                                  - Documentation: description: "Cluster credentials for prod"
+                                  - Rotation policies: rotation-policy: "30d"
+                                  - Contact information: contact: devops@example.com
+                                type: object
+                                additionalProperties:
+                                  type: string
+                                example:
+                                  managed-by: phase-operator
+                                  rotation-policy: "30d"
+                                  contact: devops@example.com
                       processors:
                         description: Processors to transform the data during ingestion.
                         type: object

@@ -1,3 +1,12 @@
+{{- /*
+  Worker Deployment
+  -----------------
+  Runs background tasks (Celery/Redis queue).
+
+  Production Readiness Tips:
+  1. Scaling: Monitor queue depth to tune HPA settings.
+  2. Graceful Shutdown: Ensure terminationGracePeriodSeconds is long enough for tasks to complete or handle SIGTERM correctly.
+*/ -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

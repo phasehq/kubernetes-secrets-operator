@@ -1,0 +1,44 @@
+{{- if .Values.podDisruptionBudget.backend.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "phase.fullname" . }}-backend
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.backend.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "phase.selectorLabels" . | nindent 6 }}
+      app: backend
+{{- end }}
+---
+{{- if .Values.podDisruptionBudget.frontend.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "phase.fullname" . }}-frontend
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.frontend.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "phase.selectorLabels" . | nindent 6 }}
+      app: frontend
+{{- end }}
+---
+{{- if .Values.podDisruptionBudget.worker.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "phase.fullname" . }}-worker
+  labels:
+    {{- include "phase.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.worker.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "phase.selectorLabels" . | nindent 6 }}
+      app: worker
+{{- end }}

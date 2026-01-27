@@ -13,3 +13,9 @@ sources:
 maintainers:
   - name: Nimish
     email: nimish@phase.dev
+
+dependencies:
+  - name: postgresql
+    version: 12.1.6
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled

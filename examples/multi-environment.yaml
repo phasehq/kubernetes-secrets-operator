@@ -1,0 +1,91 @@
+# Example: Multiple Secrets with Different Metadata
+#
+# This example shows how to manage multiple secrets with different
+# labels and annotations from a single PhaseSecret CR.
+
+apiVersion: secrets.phase.dev/v1alpha1
+kind: PhaseSecret
+metadata:
+  name: app-secrets
+  namespace: myapp
+spec:
+  phaseApp: "my-application"
+  phaseAppEnv: "production"
+  phaseHost: "https://console.phase.dev"
+  
+  authentication:
+    serviceToken:
+      serviceTokenSecretReference:
+        secretName: phase-service-token
+        secretNamespace: myapp
+  
+  managedSecretReferences:
+    # Database credentials secret
+    - secretName: db-credentials
+      secretNamespace: myapp
+      secretType: Opaque
+      
+      template:
+        metadata:
+          labels:
+            app: myapp
+            component: database
+            tier: data
+          annotations:
+            description: "PostgreSQL database credentials"
+            owner: backend-team
+      
+      processors:
+        DB_HOST:
+          asName: host
+          type: plain
+        DB_PASSWORD:
+          asName: password
+          type: plain
+    
+    # API keys secret
+    - secretName: api-keys
+      secretNamespace: myapp
+      secretType: Opaque
+      
+      template:
+        metadata:
+          labels:
+            app: myapp
+            component: api
+            tier: application
+          annotations:
+            description: "External API keys and tokens"
+            owner: integration-team
+            rotation-policy: "30d"
+      
+      processors:
+        STRIPE_KEY:
+          asName: stripe-api-key
+          type: plain
+        SENDGRID_KEY:
+          asName: sendgrid-api-key
+          type: plain
+    
+    # Monitoring credentials
+    - secretName: monitoring-creds
+      secretNamespace: myapp
+      secretType: Opaque
+      
+      template:
+        metadata:
+          labels:
+            app: myapp
+            component: observability
+            prometheus.io/scrape: "true"
+          annotations:
+            description: "Prometheus and Grafana credentials"
+            owner: sre-team
+      
+      processors:
+        PROM_USER:
+          asName: prometheus-username
+          type: plain
+        PROM_PASS:
+          asName: prometheus-password
+          type: plain

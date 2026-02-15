@@ -2,9 +2,9 @@ apiVersion: v1
 entries:
   phase:
   - apiVersion: v2
-    created: "2025-11-15T15:37:02.493652+05:30"
+    created: "2026-02-15T11:48:50.516306+05:30"
     description: A Helm chart for deploying the Phase Secrets Manager
-    digest: 962f1d473b222c05fc8ade650b0f54bb2dddff8da335564f02bdf503ed2dee58
+    digest: b282048afd1080899e96c63aca0b96560c994fab02fded4ad088d4fc0a96c88b
     home: https://github.com/phasehq/kubernetes-secrets-operator
     icon: https://phase.dev/apple-touch-icon.png
     keywords:
@@ -18,10 +18,10 @@ entries:
     - https://github.com/phasehq/console
     type: application
     urls:
-    - https://helm.phase.dev/phase-0.5.0.tgz
+    - phase-0.5.0.tgz
     version: 0.5.0
   - apiVersion: v2
-    created: "2025-09-27T18:45:20.618693+05:30"
+    created: "2026-02-15T11:48:50.514946+05:30"
     description: A Helm chart for deploying the Phase Secrets Manager
     digest: cdd437fc2cce88e078da782dd69b18eb2ddc22fe380df1ca72c767f550cecd6d
     home: https://github.com/phasehq/kubernetes-secrets-operator
@@ -37,12 +37,12 @@ entries:
     - https://github.com/phasehq/console
     type: application
     urls:
-    - https://helm.phase.dev/phase-0.4.2.tgz
+    - phase-0.4.2.tgz
     version: 0.4.2
   phase-kubernetes-operator:
   - apiVersion: v2
     appVersion: 1.3.0
-    created: "2025-11-15T15:37:02.494035+05:30"
+    created: "2026-02-15T11:48:50.516739+05:30"
     description: A Helm chart for deploying the Phase Kubernetes Operator
     digest: ac562ccaea71b4ae9bdefeeef9b3660f092b998d673ca96f7f557d05aff93895
     home: https://github.com/phasehq/kubernetes-secrets-operator
@@ -60,6 +60,6 @@ entries:
     - https://github.com/phasehq/kubernetes-secrets-operator
     type: application
     urls:
-    - https://helm.phase.dev/phase-kubernetes-operator-1.3.0.tgz
+    - phase-kubernetes-operator-1.3.0.tgz
     version: 1.3.0
-generated: "2025-11-15T15:37:02.492839+05:30"
+generated: "2026-02-15T11:48:50.513372+05:30"

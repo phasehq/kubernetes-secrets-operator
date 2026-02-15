@@ -7,12 +7,12 @@ metadata:
     job-name: {{ include "phase.fullname" . }}-migrations
   annotations:
     # Migrations hook behavior:
-    # - If `database.external = true`, the database is managed outside this chart and is
-    #   expected to exist already, so we run migrations as a *pre-install* hook and fail fast
-    #   before rolling out the rest of the stack.
-    # - If `database.external = false`, this chart creates the Postgres Deployment/PVC and
-    #   must wait for them to be ready, so we run migrations as a *post-install* hook.
-    {{- if .Values.database.external }}
+    # - If both `database.external` and `redis.external` are true, all backing services
+    #   are managed outside this chart and expected to exist already, so we run migrations
+    #   as a *pre-install* hook to fail fast before rolling out the rest of the stack.
+    # - Otherwise, at least one in-cluster Deployment (Postgres and/or Redis) must be
+    #   created first, so we run migrations as a *post-install* hook.
+    {{- if and .Values.database.external .Values.redis.external }}
     "helm.sh/hook": "pre-install,pre-upgrade"
     {{- else }}
     "helm.sh/hook": "post-install,post-upgrade"

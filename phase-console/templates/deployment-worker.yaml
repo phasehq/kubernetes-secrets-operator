@@ -15,17 +15,23 @@ spec:
       labels:
         {{- include "phase.selectorLabels" . | nindent 8 }}
         app: worker
-      annotations:
-        # Wait for the migrations to complete
-        batch.kubernetes.io/job-completion: "{{ include "phase.fullname" . }}-migrations"
     spec:
       {{- if include "phase.serviceAccountName" . }}
       serviceAccountName: {{ include "phase.serviceAccountName" . }}
+      {{- else }}
+      automountServiceAccountToken: false
       {{- end }}
+      securityContext:
+        {{- toYaml .Values.securityContext.pod | nindent 8 }}
       initContainers:
+      {{- include "phase.waitForMigrations" . | nindent 6 }}
       - name: wait-for-redis
         image: redis:alpine3.19
         command: ['sh', '-c', 'echo "Waiting for Redis at {{ tpl .Values.redis.host . }}:{{ .Values.redis.port }}..."; AUTH_ARGS=""; {{- if .Values.redis.user }} AUTH_ARGS="--user \"${REDIS_USER}\""; {{- end }} until redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }}{{- if .Values.redis.ssl }} --tls{{- end }} $AUTH_ARGS -a "$REDIS_PASSWORD" ping 2>/dev/null || redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }}{{- if .Values.redis.ssl }} --tls{{- end }} $AUTH_ARGS ping; do echo "Redis is unavailable - sleeping 5s"; sleep 5; done; echo "Redis is ready!"']
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         env:
         - name: REDIS_PASSWORD
           valueFrom:
@@ -42,11 +48,11 @@ spec:
         image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"
         imagePullPolicy: {{ .Values.app.worker.image.pullPolicy }}
         command: ["python", "manage.py", "rqworker", "default"]
+        securityContext:
+          {{- toYaml .Values.securityContext.container | nindent 12 }}
         envFrom:
         - configMapRef:
             name: {{ include "phase.fullname" . }}-config
-        - secretRef:
-            name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for worker credentials." .Values.phaseSecrets }}
         env:
         - name: ALLOWED_HOSTS
           value: "$(HOST),{{ include "phase.fullname" . }}-worker"
@@ -54,5 +60,14 @@ spec:
           value: "$(HTTP_PROTOCOL)$(HOST)"
         - name: SESSION_COOKIE_DOMAIN
           value: "$(HOST)"
+        {{- include "phase.secretFileEnvVars" (dict "keys" .Values.secrets.worker) | nindent 8 }}
+        {{- include "phase.secretDirectEnvVars" (dict "keys" .Values.secretConfigs.worker "secretName" .Values.phaseSecrets) | nindent 8 }}
+        volumeMounts:
+        {{- include "phase.secretVolumeMounts" . | nindent 8 }}
         resources:
           {{- toYaml .Values.app.worker.resources | nindent 12 }}
+      volumes:
+      - name: phase-secrets
+        projected:
+          sources:
+          {{- include "phase.secretVolumeSources" (dict "keys" .Values.secrets.worker "secretName" .Values.phaseSecrets) | nindent 10 }}

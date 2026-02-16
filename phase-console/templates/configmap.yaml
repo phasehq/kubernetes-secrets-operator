@@ -4,7 +4,7 @@ metadata:
   name: {{ include "phase.fullname" . }}-config
   labels:
     {{- include "phase.labels" . | nindent 4 }}
-  {{- if .Values.database.external }}
+  {{- if and .Values.database.external .Values.redis.external }}
   annotations:
     "helm.sh/hook": "pre-install,pre-upgrade"
     "helm.sh/hook-weight": "0"
@@ -21,6 +21,12 @@ data:
   {{- if .Values.database.sslmode }}
   DATABASE_SSLMODE: {{ .Values.database.sslmode | quote }}
   {{- end }}
+  {{- if .Values.database.ssl }}
+  DATABASE_SSL: "True"
+  {{- end }}
+  {{- if .Values.database.sslCaPath }}
+  DATABASE_SSL_CA_PATH: {{ .Values.database.sslCaPath | quote }}
+  {{- end }}
   REDIS_HOST: {{ tpl .Values.redis.host . | quote }}
   REDIS_PORT: {{ .Values.redis.port | quote }}
   {{- if .Values.redis.user }}
@@ -29,7 +35,46 @@ data:
   {{- if .Values.redis.ssl }}
   REDIS_SSL: "True"
   {{- end }}
+  {{- if .Values.redis.sslCaPath }}
+  REDIS_SSL_CA_PATH: {{ .Values.redis.sslCaPath | quote }}
+  {{- end }}
+  {{- if .Values.smtp.server }}
+  SMTP_SERVER: {{ .Values.smtp.server | quote }}
+  {{- end }}
+  {{- if .Values.smtp.port }}
+  SMTP_PORT: {{ .Values.smtp.port | quote }}
+  {{- end }}
+  {{- if .Values.smtp.username }}
+  SMTP_USERNAME: {{ .Values.smtp.username | quote }}
+  {{- end }}
+  {{- if .Values.smtp.defaultFromEmail }}
+  DEFAULT_FROM_EMAIL: {{ .Values.smtp.defaultFromEmail | quote }}
+  {{- end }}
+  {{- if .Values.smtp.timeout }}
+  SMTP_TIMEOUT: {{ .Values.smtp.timeout | quote }}
+  {{- end }}
+  {{- if .Values.smtp.useTls }}
+  SMTP_USE_TLS: {{ .Values.smtp.useTls | quote }}
+  {{- end }}
+  {{- if .Values.smtp.useSsl }}
+  SMTP_USE_SSL: {{ .Values.smtp.useSsl | quote }}
+  {{- end }}
   SESSION_COOKIE_DOMAIN: {{ .Values.global.host | quote }}
+  {{- if .Values.userEmailDomainWhitelist }}
+  USER_EMAIL_DOMAIN_WHITELIST: {{ .Values.userEmailDomainWhitelist | quote }}
+  {{- end }}
+  {{- if .Values.loginBannerText }}
+  LOGIN_BANNER_TEXT: {{ .Values.loginBannerText | quote }}
+  {{- end }}
+  {{- if .Values.app.backend.gunicornWorkers }}
+  GUNICORN_WORKERS: {{ .Values.app.backend.gunicornWorkers | quote }}
+  {{- end }}
+  {{- if .Values.app.backend.rateLimitDefault }}
+  RATE_LIMIT_DEFAULT: {{ .Values.app.backend.rateLimitDefault | quote }}
+  {{- end }}
+  {{- if .Values.debug }}
+  DEBUG: "True"
+  {{- end }}
   {{- if .Values.license }}
   {{- if .Values.license.offline }}
   PHASE_LICENSE_OFFLINE: {{ .Values.license.offline | quote }}

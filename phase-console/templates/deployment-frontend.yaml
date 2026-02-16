@@ -16,6 +16,9 @@ spec:
         {{- include "phase.selectorLabels" . | nindent 8 }}
         app: frontend
     spec:
+      automountServiceAccountToken: false
+      initContainers:
+      {{- include "phase.waitForMigrations" . | nindent 6 }}
       containers:
       - name: frontend
         image: "{{ .Values.global.images.frontend.repository }}:{{ .Values.global.version }}"
@@ -25,8 +28,6 @@ spec:
         envFrom:
         - configMapRef:
             name: {{ include "phase.fullname" . }}-config
-        - secretRef:
-            name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for frontend credentials." .Values.phaseSecrets }}
         env:
         - name: NEXTAUTH_URL
           value: "$(HTTP_PROTOCOL)$(HOST)"
@@ -36,6 +37,10 @@ spec:
           value: "$(HTTP_PROTOCOL)$(HOST)/service"
         - name: NEXT_PUBLIC_NEXTAUTH_PROVIDERS
           value: "$(SSO_PROVIDERS)"
+        {{- include "phase.secretFileEnvVars" (dict "keys" .Values.secrets.frontend) | nindent 8 }}
+        {{- include "phase.secretDirectEnvVars" (dict "keys" .Values.secretConfigs.frontend "secretName" .Values.phaseSecrets) | nindent 8 }}
+        volumeMounts:
+        {{- include "phase.secretVolumeMounts" . | nindent 8 }}
         {{- if .Values.app.frontend.readinessProbe.enabled }}
         readinessProbe:
           httpGet:
@@ -46,3 +51,8 @@ spec:
         {{- end }}
         resources:
           {{- toYaml .Values.app.frontend.resources | nindent 12 }}
+      volumes:
+      - name: phase-secrets
+        projected:
+          sources:
+          {{- include "phase.secretVolumeSources" (dict "keys" .Values.secrets.frontend "secretName" .Values.phaseSecrets) | nindent 10 }}

@@ -45,14 +45,13 @@ spec:
                 name: {{ include "phase.fullname" $ }}-frontend
                 port:
                   number: 3000
-  {{- if or .Values.ingress.tls .Values.certManager.enabled }}
+  {{- if .Values.certManager.enabled }}
   tls:
     - hosts:
         - {{ .Values.ingress.host | default .Values.global.host | quote }}
-      {{- if .Values.certManager.enabled }}
       secretName: {{ include "phase.fullname" . }}-tls
-      {{- else }}
-      secretName: {{ .Values.ingress.tlsSecretName }}
-      {{- end }}
+  {{- else if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
   {{- end }}
 {{- end }}

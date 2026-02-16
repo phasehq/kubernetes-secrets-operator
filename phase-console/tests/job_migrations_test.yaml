@@ -1,0 +1,56 @@
+suite: Migrations Job
+templates:
+  - job-migrations.yaml
+tests:
+  - it: should use post-install hook when both services are internal
+    set:
+      database.external: false
+      redis.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - isKind:
+          of: Job
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: "post-install,post-upgrade"
+
+  - it: should use pre-install hook when both services are external
+    set:
+      database.external: true
+      redis.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: "pre-install,pre-upgrade"
+
+  - it: should use post-install hook when only database is external
+    set:
+      database.external: true
+      redis.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: "post-install,post-upgrade"
+
+  - it: should use post-install hook when only redis is external
+    set:
+      database.external: false
+      redis.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: "post-install,post-upgrade"
+
+  - it: should have security contexts on init containers
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].securityContext.allowPrivilegeEscalation
+          value: false
+      - equal:
+          path: spec.template.spec.initContainers[1].securityContext.allowPrivilegeEscalation
+          value: false

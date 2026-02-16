@@ -1,0 +1,53 @@
+suite: Horizontal Pod Autoscaler
+templates:
+  - hpa.yaml
+tests:
+  - it: should not render any HPAs when all are disabled
+    set:
+      autoscaling.backend.enabled: false
+      autoscaling.frontend.enabled: false
+      autoscaling.worker.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should render backend HPA when enabled
+    set:
+      autoscaling.backend.enabled: true
+      autoscaling.backend.minReplicas: 2
+      autoscaling.backend.maxReplicas: 5
+      autoscaling.backend.targetCPUUtilizationPercentage: 75
+      autoscaling.frontend.enabled: false
+      autoscaling.worker.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: HorizontalPodAutoscaler
+      - equal:
+          path: spec.scaleTargetRef.name
+          value: RELEASE-NAME-phase-backend
+      - equal:
+          path: spec.minReplicas
+          value: 2
+      - equal:
+          path: spec.maxReplicas
+          value: 5
+
+  - it: should render all HPAs when all are enabled
+    set:
+      autoscaling.backend.enabled: true
+      autoscaling.frontend.enabled: true
+      autoscaling.worker.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 3
+
+  - it: should use autoscaling/v2 API
+    set:
+      autoscaling.backend.enabled: true
+      autoscaling.frontend.enabled: false
+      autoscaling.worker.enabled: false
+    asserts:
+      - isAPIVersion:
+          of: autoscaling/v2

@@ -1,0 +1,125 @@
+suite: Security Contexts
+templates:
+  - deployment-backend.yaml
+  - deployment-frontend.yaml
+  - deployment-worker.yaml
+  - deployment-redis.yaml
+  - deployment-postgres.yaml
+tests:
+  - it: backend should have pod security context
+    template: deployment-backend.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 1000
+
+  - it: backend container should have security context
+    template: deployment-backend.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation
+          value: false
+      - contains:
+          path: spec.template.spec.containers[0].securityContext.capabilities.drop
+          content: ALL
+
+  - it: frontend should not have pod security context (image needs root for sed)
+    template: deployment-frontend.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - isNull:
+          path: spec.template.spec.securityContext
+
+  - it: frontend container should not have security context
+    template: deployment-frontend.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].securityContext
+
+  - it: worker should have pod security context
+    template: deployment-worker.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+
+  - it: worker init container should have security context
+    template: deployment-worker.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].securityContext.allowPrivilegeEscalation
+          value: false
+
+  - it: redis should use UID 999
+    template: deployment-redis.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 999
+      - equal:
+          path: spec.template.spec.securityContext.runAsGroup
+          value: 999
+
+  - it: redis container should have security context
+    template: deployment-redis.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation
+          value: false
+      - contains:
+          path: spec.template.spec.containers[0].securityContext.capabilities.drop
+          content: ALL
+
+  - it: postgres should use UID 999
+    template: deployment-postgres.yaml
+    set:
+      database.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 999
+      - equal:
+          path: spec.template.spec.securityContext.runAsGroup
+          value: 999
+
+  - it: backend should disable automountServiceAccountToken when no SA
+    template: deployment-backend.yaml
+    set:
+      phaseSecrets: test-secret
+      serviceAccount.create: false
+      serviceAccount.name: ""
+    asserts:
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+
+  - it: backend should set serviceAccountName when SA is configured
+    template: deployment-backend.yaml
+    set:
+      phaseSecrets: test-secret
+      serviceAccount.name: my-irsa-sa
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: "my-irsa-sa"
+      - isNull:
+          path: spec.template.spec.automountServiceAccountToken

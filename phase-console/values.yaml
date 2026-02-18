@@ -9,7 +9,21 @@ global:
     backend:
       repository: phasehq/backend
   external:
-    enabled: false  # Set to true to use external managed services
+    enabled: false  # DEPRECATED: no longer used by the chart; use `database.external` and `redis.external` instead.
+  # Examples:
+    # External service patterns (internal vs external Postgres/Redis):
+    # - Both Postgres & Redis inside the cluster:
+    #     database.external = false
+    #     redis.external = false
+    # - Both Postgres & Redis outside the cluster:
+    #     database.external = true
+    #     redis.external = true
+    # - External Postgres only (Redis inside cluster):
+    #     database.external = true
+    #     redis.external = false
+    # - External Redis only (Postgres inside cluster):
+    #     database.external = false
+    #     redis.external = true
 
 sso:
   providers: "google,github,gitlab"

@@ -6,6 +6,12 @@ metadata:
     {{- include "phase.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.app.backend.replicaCount }}
+  minReadySeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       {{- include "phase.selectorLabels" . | nindent 6 }}
@@ -15,22 +21,25 @@ spec:
       labels:
         {{- include "phase.selectorLabels" . | nindent 8 }}
         app: backend
-      annotations:
-        # Wait for the migrations to complete
-        batch.kubernetes.io/job-completion: "{{ include "phase.fullname" . }}-migrations"
     spec:
       {{- if include "phase.serviceAccountName" . }}
       serviceAccountName: {{ include "phase.serviceAccountName" . }}
+      {{- else }}
+      automountServiceAccountToken: false
       {{- end }}
+      securityContext:
+        {{- toYaml .Values.securityContext.pod | nindent 8 }}
+      initContainers:
+      {{- include "phase.waitForMigrations" . | nindent 6 }}
       containers:
       - name: backend
         image: "{{ .Values.global.images.backend.repository }}:{{ .Values.global.version }}"
         imagePullPolicy: {{ .Values.app.backend.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext.container | nindent 12 }}
         envFrom:
         - configMapRef:
             name: {{ include "phase.fullname" . }}-config
-        - secretRef:
-            name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for backend credentials." .Values.phaseSecrets }}
         env:
         - name: OAUTH_REDIRECT_URI
           value: "$(HTTP_PROTOCOL)$(HOST)"
@@ -42,6 +51,10 @@ spec:
           value: "$(HOST)"
         - name: EXTERNAL_MIGRATION
           value: "true"
+        {{- include "phase.secretFileEnvVars" (dict "keys" .Values.secrets.backend) | nindent 8 }}
+        {{- include "phase.secretDirectEnvVars" (dict "keys" .Values.secretConfigs.backend "secretName" .Values.phaseSecrets) | nindent 8 }}
+        volumeMounts:
+        {{- include "phase.secretVolumeMounts" . | nindent 8 }}
         {{- if .Values.app.backend.readinessProbe.enabled }}
         readinessProbe:
           httpGet:
@@ -68,3 +81,8 @@ spec:
         {{- end }}
         resources:
           {{- toYaml .Values.app.backend.resources | nindent 12 }}
+      volumes:
+      - name: phase-secrets
+        projected:
+          sources:
+          {{- include "phase.secretVolumeSources" (dict "keys" .Values.secrets.backend "secretName" .Values.phaseSecrets) | nindent 10 }}

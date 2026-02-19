@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "phase.labels" . | nindent 4 }}
 spec:
-  type: ClusterIP
+  clusterIP: None
   ports:
     - port: {{ .Values.database.service.port }}
       targetPort: 5432

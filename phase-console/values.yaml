@@ -37,6 +37,13 @@ license:
   # See PHASE_LICENSE_OFFLINE in: https://docs.phase.dev/self-hosting/configuration/envars#additional-environment-variables
   offline: ""
 
+# Optional: Comma-separated list of email domains to restrict logins
+userEmailDomainWhitelist: ""
+# Optional: Custom message displayed on the login screen (max 512 chars)
+loginBannerText: ""
+# Enable debug mode (never use in production)
+debug: false
+
 # Ingress settings
 ingress:
   enabled: true
@@ -65,8 +72,11 @@ app:
       periodSeconds: 5
     resources:
       requests:
-        cpu: 500m
-        memory: 1Gi
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1.5Gi
 
   backend:
     image:
@@ -85,10 +95,17 @@ app:
       initialDelaySeconds: 15
       periodSeconds: 20
       timeoutSeconds: 5
+    # Number of Gunicorn worker processes (auto-calculated from CPU cores if unset, capped at 8)
+    gunicornWorkers: ""
+    # Rate limit for API requests (e.g. "100/minute")
+    rateLimitDefault: ""
     resources:
       requests:
         cpu: 500m
-        memory: 1Gi
+        memory: 512Mi
+      limits:
+        cpu: 3000m
+        memory: 3Gi
 
   worker:
     image:
@@ -96,16 +113,22 @@ app:
     replicaCount: 1
     resources:
       requests:
-        cpu: 250m
+        cpu: 500m
         memory: 512Mi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
 
   migrations:
     image:
       pullPolicy: IfNotPresent
     resources:
       requests:
-        cpu: 125m
+        cpu: 100m
         memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
 
 database:
   external: false
@@ -116,6 +139,10 @@ database:
   # Set SSL/TLS mode for Postgres connections made by initContainers and apps
   # Accepted values include: disable, allow, prefer, require, verify-ca, verify-full
   sslmode: ""
+  # Enable SSL/TLS for database connections (default: False)
+  ssl: false
+  # Path to CA certificate bundle for verifying database TLS certificate
+  sslCaPath: ""
   image:
     repository: postgres
     tag: 15.4-alpine3.17
@@ -131,6 +158,9 @@ database:
     requests:
       cpu: 500m
       memory: 1Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
 
 # Redis settings
 redis:
@@ -141,6 +171,8 @@ redis:
   ssl: false
   # Optional user for Redis ACL (e.g., managed Redis/Valkey)
   user: ""
+  # Path to CA certificate bundle for Redis SSL verification
+  sslCaPath: ""
   image:
     repository: redis
     tag: alpine3.19
@@ -148,12 +180,27 @@ redis:
   service:
     port: 6379
   readinessProbe:
+    enabled: true
     initialDelaySeconds: 5
     periodSeconds: 5
   resources:
     requests:
-      cpu: 100m
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
       memory: 256Mi
+
+# SMTP email gateway settings
+# Docs: https://docs.phase.dev/self-hosting/configuration/envars#email-gateway-configuration
+smtp:
+  server: ""
+  port: ""
+  username: ""
+  defaultFromEmail: ""
+  timeout: ""
+  useTls: ""
+  useSsl: ""
 
 # Specifies whether a service account should be created.
 serviceAccount:
@@ -186,3 +233,117 @@ autoscaling:
     minReplicas: 1
     maxReplicas: 10
     targetCPUUtilizationPercentage: 80
+
+# Pod Disruption Budget settings
+podDisruptionBudget:
+  backend:
+    enabled: false
+    # minAvailable: 1
+    maxUnavailable: 1
+  frontend:
+    enabled: false
+    # minAvailable: 1
+    maxUnavailable: 1
+  worker:
+    enabled: false
+    # minAvailable: 1
+    maxUnavailable: 1
+
+# Keys in `secrets` are mounted as files at /etc/phase/secrets/<KEY>
+# and exposed via <KEY>_FILE env vars (get_secret() pattern).
+# All keys use optional: true so missing keys are silently ignored.
+secrets:
+  backend:
+    - SECRET_KEY
+    - SERVER_SECRET
+    - DATABASE_PASSWORD
+    - REDIS_PASSWORD
+    - SMTP_PASSWORD
+    - GOOGLE_CLIENT_SECRET
+    - GITHUB_CLIENT_SECRET
+    - GITHUB_ENTERPRISE_CLIENT_SECRET
+    - GITLAB_CLIENT_SECRET
+    - AUTHENTIK_CLIENT_SECRET
+    - GOOGLE_OIDC_CLIENT_SECRET
+    - JUMPCLOUD_OIDC_CLIENT_SECRET
+    - ENTRA_ID_OIDC_CLIENT_SECRET
+    - OKTA_OIDC_CLIENT_SECRET
+    - GITHUB_INTEGRATION_CLIENT_SECRET
+    - GITHUB_ENTERPRISE_INTEGRATION_CLIENT_SECRET
+    - AWS_INTEGRATION_SECRET_ACCESS_KEY
+  worker:
+    - SECRET_KEY
+    - SERVER_SECRET
+    - DATABASE_PASSWORD
+    - REDIS_PASSWORD
+    - SMTP_PASSWORD
+    - AWS_INTEGRATION_SECRET_ACCESS_KEY
+  frontend:
+    - GOOGLE_CLIENT_SECRET
+    - GITHUB_CLIENT_SECRET
+    - GITHUB_ENTERPRISE_CLIENT_SECRET
+    - GITLAB_CLIENT_SECRET
+    - AUTHENTIK_CLIENT_SECRET
+    - GOOGLE_OIDC_CLIENT_SECRET
+    - JUMPCLOUD_OIDC_CLIENT_SECRET
+    - ENTRA_ID_OIDC_CLIENT_SECRET
+    - OKTA_OIDC_CLIENT_SECRET
+
+# Non-secret configs
+secretConfigs:
+  backend:
+    - GOOGLE_CLIENT_ID
+    - GITHUB_CLIENT_ID
+    - GITHUB_ENTERPRISE_CLIENT_ID
+    - GITLAB_CLIENT_ID
+    - AUTHENTIK_CLIENT_ID
+    - GOOGLE_OIDC_CLIENT_ID
+    - JUMPCLOUD_OIDC_CLIENT_ID
+    - ENTRA_ID_OIDC_CLIENT_ID
+    - OKTA_OIDC_CLIENT_ID
+    - ENTRA_ID_OIDC_TENANT_ID
+    - OKTA_OIDC_ISSUER
+    - AUTHENTIK_URL
+    - AUTHENTIK_APP_SLUG
+    - GITLAB_AUTH_URL
+    - GITHUB_ENTERPRISE_BASE_URL
+    - GITHUB_ENTERPRISE_API_URL
+    - GITHUB_INTEGRATION_CLIENT_ID
+    - GITHUB_ENTERPRISE_INTEGRATION_CLIENT_ID
+    - AWS_INTEGRATION_ACCESS_KEY_ID
+  worker:
+    - AWS_INTEGRATION_ACCESS_KEY_ID
+  frontend:
+    - NEXTAUTH_SECRET # This is needs to an environemnt variable
+    - GOOGLE_CLIENT_ID
+    - GITHUB_CLIENT_ID
+    - GITHUB_ENTERPRISE_CLIENT_ID
+    - GITLAB_CLIENT_ID
+    - AUTHENTIK_CLIENT_ID
+    - GOOGLE_OIDC_CLIENT_ID
+    - JUMPCLOUD_OIDC_CLIENT_ID
+    - ENTRA_ID_OIDC_CLIENT_ID
+    - OKTA_OIDC_CLIENT_ID
+    - ENTRA_ID_OIDC_TENANT_ID
+    - OKTA_OIDC_ISSUER
+    - AUTHENTIK_URL
+    - AUTHENTIK_APP_SLUG
+    - GITLAB_AUTH_URL
+    - GITHUB_ENTERPRISE_BASE_URL
+    - GITHUB_ENTERPRISE_API_URL
+    - GITHUB_INTEGRATION_CLIENT_ID
+    - GITHUB_ENTERPRISE_INTEGRATION_CLIENT_ID
+
+# Security context defaults
+securityContext:
+  # Pod-level security context for app containers (frontend, backend, worker)
+  pod:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  # Container-level security context applied to all containers
+  container:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]

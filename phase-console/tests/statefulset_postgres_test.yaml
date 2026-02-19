@@ -1,0 +1,88 @@
+suite: PostgreSQL StatefulSet
+templates:
+  - deployment-postgres.yaml
+tests:
+  - it: should create a StatefulSet when database.external is false
+    set:
+      database.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - isKind:
+          of: StatefulSet
+      - equal:
+          path: spec.serviceName
+          value: RELEASE-NAME-phase-postgres
+
+  - it: should not render when database.external is true
+    set:
+      database.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should use volumeClaimTemplates when persistence is enabled
+    set:
+      database.external: false
+      database.persistence.enabled: true
+      database.persistence.size: 50Gi
+      database.persistence.accessMode: ReadWriteOnce
+      phaseSecrets: test-secret
+    asserts:
+      - isKind:
+          of: StatefulSet
+      - isNotEmpty:
+          path: spec.volumeClaimTemplates
+      - equal:
+          path: spec.volumeClaimTemplates[0].metadata.name
+          value: postgres-data
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 50Gi
+
+  - it: should use emptyDir when persistence is disabled
+    set:
+      database.external: false
+      database.persistence.enabled: false
+      phaseSecrets: test-secret
+    asserts:
+      - isKind:
+          of: StatefulSet
+      - isNull:
+          path: spec.volumeClaimTemplates
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: postgres-data
+            emptyDir: {}
+
+  - it: should not have envFrom (no configMapRef or secretRef)
+    set:
+      database.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].envFrom
+
+  - it: should set explicit env vars for POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, PGDATA
+    set:
+      database.external: false
+      database.name: mydb
+      database.user: myuser
+      phaseSecrets: test-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: POSTGRES_DB
+            value: "mydb"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: POSTGRES_USER
+            value: "myuser"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PGDATA
+            value: /var/lib/postgresql/data/pgdata

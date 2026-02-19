@@ -1,0 +1,52 @@
+suite: Pod Disruption Budget
+templates:
+  - pdb.yaml
+tests:
+  - it: should not render any PDBs when all are disabled
+    set:
+      podDisruptionBudget.backend.enabled: false
+      podDisruptionBudget.frontend.enabled: false
+      podDisruptionBudget.worker.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should render backend PDB when enabled
+    set:
+      podDisruptionBudget.backend.enabled: true
+      podDisruptionBudget.backend.maxUnavailable: 1
+      podDisruptionBudget.frontend.enabled: false
+      podDisruptionBudget.worker.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: PodDisruptionBudget
+      - equal:
+          path: spec.maxUnavailable
+          value: 1
+      - equal:
+          path: spec.selector.matchLabels.app
+          value: backend
+
+  - it: should render all PDBs when all are enabled
+    set:
+      podDisruptionBudget.backend.enabled: true
+      podDisruptionBudget.frontend.enabled: true
+      podDisruptionBudget.worker.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 3
+
+  - it: should use minAvailable when set
+    set:
+      podDisruptionBudget.backend.enabled: true
+      podDisruptionBudget.backend.minAvailable: 2
+      podDisruptionBudget.frontend.enabled: false
+      podDisruptionBudget.worker.enabled: false
+    asserts:
+      - equal:
+          path: spec.minAvailable
+          value: 2
+      - isNull:
+          path: spec.maxUnavailable

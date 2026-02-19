@@ -82,3 +82,82 @@ We want our deployments to *always* specify a serviceAccountName if values.servi
 {{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Init container that blocks until Django migrations have been applied.
+Queries the django_migrations table — fails (and retries) until the table exists.
+Used by backend, worker, and frontend to ensure migrations complete before the main container starts.
+*/}}
+{{- define "phase.waitForMigrations" -}}
+- name: wait-for-migrations
+  image: postgres:15.4-alpine3.17
+  command: ['sh', '-c', 'echo "Waiting for database migrations to complete..."; until psql -h {{ tpl .Values.database.host . }} -p {{ .Values.database.port }} -U {{ .Values.database.user }} -d {{ .Values.database.name }} -c "SELECT 1 FROM django_migrations LIMIT 1;" >/dev/null 2>&1; do echo "Migrations pending - sleeping 5s"; sleep 5; done; echo "Migrations complete!"']
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+  env:
+  - name: PGPASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.phaseSecrets }}
+        key: DATABASE_PASSWORD
+  {{- if .Values.database.sslmode }}
+  - name: PGSSLMODE
+    value: {{ .Values.database.sslmode | quote }}
+  {{- end }}
+{{- end -}}
+
+{{/*
+Projected volume sources for file-based secret keys.
+Usage: {{ include "phase.secretVolumeSources" (dict "keys" .Values.secrets.backend "secretName" .Values.phaseSecrets) }}
+Produces a list of projected volume sources, one per key, each optional.
+*/}}
+{{- define "phase.secretVolumeSources" -}}
+{{- range .keys }}
+- secret:
+    name: {{ $.secretName }}
+    optional: true
+    items:
+    - key: {{ . }}
+      path: {{ . }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Volume mount for file-based secrets at /etc/phase/secrets.
+Usage: {{ include "phase.secretVolumeMounts" . }}
+*/}}
+{{- define "phase.secretVolumeMounts" -}}
+- name: phase-secrets
+  mountPath: /etc/phase/secrets
+  readOnly: true
+{{- end -}}
+
+{{/*
+_FILE env vars pointing to the mounted secret files.
+Usage: {{ include "phase.secretFileEnvVars" (dict "keys" .Values.secrets.backend) }}
+Produces env entries like: SECRET_KEY_FILE=/etc/phase/secrets/SECRET_KEY
+*/}}
+{{- define "phase.secretFileEnvVars" -}}
+{{- range .keys }}
+- name: {{ . }}_FILE
+  value: /etc/phase/secrets/{{ . }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Direct env vars via secretKeyRef (optional).
+Usage: {{ include "phase.secretDirectEnvVars" (dict "keys" .Values.secretConfigs.backend "secretName" .Values.phaseSecrets) }}
+*/}}
+{{- define "phase.secretDirectEnvVars" -}}
+{{- range .keys }}
+- name: {{ . }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ $.secretName }}
+      key: {{ . }}
+      optional: true
+{{- end }}
+{{- end -}}
+

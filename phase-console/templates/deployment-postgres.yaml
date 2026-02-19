@@ -1,11 +1,12 @@
 {{- if not .Values.database.external }}
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "phase.fullname" . }}-postgres
   labels:
     {{- include "phase.labels" . | nindent 4 }}
 spec:
+  serviceName: {{ include "phase.fullname" . }}-postgres
   replicas: 1
   selector:
     matchLabels:
@@ -17,20 +18,20 @@ spec:
         {{- include "phase.selectorLabels" . | nindent 8 }}
         app: postgres
     spec:
+      automountServiceAccountToken: false
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
         fsGroup: 999
       containers:
       - name: postgres
         image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
         imagePullPolicy: {{ .Values.database.image.pullPolicy }}
         securityContext:
-          runAsUser: 999
-          runAsGroup: 999
-        envFrom:
-        - configMapRef:
-            name: {{ include "phase.fullname" . }}-config
-        - secretRef:
-            name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for database credentials." .Values.phaseSecrets }}
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         env:
         - name: POSTGRES_DB
           value: {{ .Values.database.name | quote }}
@@ -39,7 +40,7 @@ spec:
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ required "**Error:** `phaseSecrets` is required. Set it in `values.yaml` or via `--set phaseSecrets=my-secret-name` to specify the Secret for database credentials." .Values.phaseSecrets }}
+              name: {{ required "**Error:** `phaseSecrets` is required." .Values.phaseSecrets }}
               key: DATABASE_PASSWORD
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata
@@ -47,7 +48,7 @@ spec:
         - name: postgres
           containerPort: 5432
         volumeMounts:
-        - name: postgres-storage
+        - name: postgres-data
           mountPath: /var/lib/postgresql/data
         resources:
           {{- toYaml .Values.database.resources | nindent 12 }}
@@ -71,31 +72,23 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 6
+      {{- if not .Values.database.persistence.enabled }}
       volumes:
-      - name: postgres-storage
-        {{- if .Values.database.persistence.enabled }}
-        persistentVolumeClaim:
-          claimName: {{ include "phase.fullname" . }}-postgres-pvc
-        {{- else }}
+      - name: postgres-data
         emptyDir: {}
-        {{- end }}
-
----
-{{- if and (not .Values.database.external) .Values.database.persistence.enabled }}
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ include "phase.fullname" . }}-postgres-pvc
-  labels:
-    {{- include "phase.labels" . | nindent 4 }}
-spec:
-  accessModes:
-    - {{ .Values.database.persistence.accessMode }}
-  resources:
-    requests:
-      storage: {{ .Values.database.persistence.size }}
-  {{- if .Values.database.persistence.storageClass }}
-  storageClassName: {{ .Values.database.persistence.storageClass }}
+      {{- end }}
+  {{- if .Values.database.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes:
+        - {{ .Values.database.persistence.accessMode }}
+      resources:
+        requests:
+          storage: {{ .Values.database.persistence.size }}
+      {{- if .Values.database.persistence.storageClass }}
+      storageClassName: {{ .Values.database.persistence.storageClass }}
+      {{- end }}
   {{- end }}
-{{- end }}
 {{- end }}

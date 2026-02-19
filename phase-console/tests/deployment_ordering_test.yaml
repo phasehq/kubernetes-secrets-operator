@@ -1,0 +1,353 @@
+suite: Deployment Ordering & Dependencies
+templates:
+  - deployment-backend.yaml
+  - deployment-frontend.yaml
+  - deployment-worker.yaml
+  - deployment-redis.yaml
+  - deployment-postgres.yaml
+  - job-migrations.yaml
+  - configmap.yaml
+  - service-postgres.yaml
+tests:
+  # ── wait-for-migrations init container on all app components ────
+  - it: backend should have wait-for-migrations init container
+    template: deployment-backend.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: wait-for-migrations
+      - contains:
+          path: spec.template.spec.initContainers[0].command
+          content: 'sh'
+
+  - it: frontend should have wait-for-migrations init container
+    template: deployment-frontend.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: wait-for-migrations
+      - contains:
+          path: spec.template.spec.initContainers[0].command
+          content: 'sh'
+
+  - it: worker should have wait-for-migrations as first init container
+    template: deployment-worker.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: wait-for-migrations
+
+  - it: worker should have wait-for-redis as second init container
+    template: deployment-worker.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[1].name
+          value: wait-for-redis
+
+  # ── wait-for-migrations connects to correct database ────────────
+  - it: backend wait-for-migrations should use DATABASE_PASSWORD from secret
+    template: deployment-backend.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers[0].env
+          content:
+            name: PGPASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: test-secret
+                key: DATABASE_PASSWORD
+
+  - it: backend wait-for-migrations should have security context
+    template: deployment-backend.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].securityContext.allowPrivilegeEscalation
+          value: false
+
+  - it: frontend wait-for-migrations should have security context
+    template: deployment-frontend.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].securityContext.allowPrivilegeEscalation
+          value: false
+
+  - it: wait-for-migrations should include PGSSLMODE when database.sslmode is set
+    template: deployment-backend.yaml
+    set:
+      phaseSecrets: test-secret
+      database.sslmode: require
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers[0].env
+          content:
+            name: PGSSLMODE
+            value: "require"
+
+  - it: wait-for-migrations should not include PGSSLMODE when database.sslmode is empty
+    template: deployment-backend.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - notContains:
+          path: spec.template.spec.initContainers[0].env
+          content:
+            name: PGSSLMODE
+          any: true
+
+  # ── Scenario: both in-cluster (default) ─────────────────────────
+  - it: "in-cluster: postgres StatefulSet should be created"
+    template: deployment-postgres.yaml
+    set:
+      database.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - isKind:
+          of: StatefulSet
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-phase-postgres
+
+  - it: "in-cluster: redis Deployment should be created"
+    template: deployment-redis.yaml
+    set:
+      redis.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - isKind:
+          of: Deployment
+
+  - it: "in-cluster: postgres headless service should be created"
+    template: service-postgres.yaml
+    set:
+      database.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - isKind:
+          of: Service
+      - equal:
+          path: spec.clusterIP
+          value: None
+
+  - it: "in-cluster: migrations should be post-install hook"
+    template: job-migrations.yaml
+    set:
+      database.external: false
+      redis.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: "post-install,post-upgrade"
+
+  - it: "in-cluster: configmap should NOT be a hook"
+    template: configmap.yaml
+    set:
+      database.external: false
+      redis.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - isNull:
+          path: metadata.annotations
+
+  # ── Scenario: both external ─────────────────────────────────────
+  - it: "both external: postgres StatefulSet should NOT be created"
+    template: deployment-postgres.yaml
+    set:
+      database.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: "both external: redis Deployment should NOT be created"
+    template: deployment-redis.yaml
+    set:
+      redis.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: "both external: postgres service should NOT be created"
+    template: service-postgres.yaml
+    set:
+      database.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: "both external: migrations should be pre-install hook"
+    template: job-migrations.yaml
+    set:
+      database.external: true
+      redis.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: "pre-install,pre-upgrade"
+
+  - it: "both external: configmap should be a pre-install hook"
+    template: configmap.yaml
+    set:
+      database.external: true
+      redis.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: "pre-install,pre-upgrade"
+      - equal:
+          path: metadata.annotations["helm.sh/hook-weight"]
+          value: "0"
+
+  # ── Scenario: external database, in-cluster redis ───────────────
+  - it: "external db / in-cluster redis: postgres should NOT be created"
+    template: deployment-postgres.yaml
+    set:
+      database.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: "external db / in-cluster redis: redis should be created"
+    template: deployment-redis.yaml
+    set:
+      redis.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - isKind:
+          of: Deployment
+
+  - it: "external db / in-cluster redis: migrations should be post-install"
+    template: job-migrations.yaml
+    set:
+      database.external: true
+      redis.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: "post-install,post-upgrade"
+
+  - it: "external db / in-cluster redis: configmap should NOT be a hook"
+    template: configmap.yaml
+    set:
+      database.external: true
+      redis.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - isNull:
+          path: metadata.annotations
+
+  # ── Scenario: in-cluster database, external redis ───────────────
+  - it: "in-cluster db / external redis: postgres should be created"
+    template: deployment-postgres.yaml
+    set:
+      database.external: false
+      phaseSecrets: test-secret
+    asserts:
+      - isKind:
+          of: StatefulSet
+
+  - it: "in-cluster db / external redis: redis should NOT be created"
+    template: deployment-redis.yaml
+    set:
+      redis.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: "in-cluster db / external redis: migrations should be post-install"
+    template: job-migrations.yaml
+    set:
+      database.external: false
+      redis.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: "post-install,post-upgrade"
+
+  - it: "in-cluster db / external redis: configmap should NOT be a hook"
+    template: configmap.yaml
+    set:
+      database.external: false
+      redis.external: true
+      phaseSecrets: test-secret
+    asserts:
+      - isNull:
+          path: metadata.annotations
+
+  # ── Worker wait-for-redis uses correct external host ────────────
+  - it: worker wait-for-redis should target in-cluster redis host
+    template: deployment-worker.yaml
+    set:
+      phaseSecrets: test-secret
+      redis.external: false
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[1].name
+          value: wait-for-redis
+
+  - it: worker wait-for-redis should use REDIS_PASSWORD from secret
+    template: deployment-worker.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers[1].env
+          content:
+            name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: test-secret
+                key: REDIS_PASSWORD
+                optional: true
+
+  # ── Migrations job init containers ──────────────────────────────
+  - it: migrations job should have wait-for-redis init container
+    template: job-migrations.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: wait-for-redis
+
+  - it: migrations job should have check-db-ready init container
+    template: job-migrations.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[1].name
+          value: check-db-ready
+
+  - it: migrations job should use envFrom secretRef (blanket injection)
+    template: job-migrations.yaml
+    set:
+      phaseSecrets: test-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].envFrom
+          content:
+            secretRef:
+              name: test-secret

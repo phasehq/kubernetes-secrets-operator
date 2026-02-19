@@ -72,8 +72,11 @@ app:
       periodSeconds: 5
     resources:
       requests:
-        cpu: 500m
-        memory: 1Gi
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1.5Gi
 
   backend:
     image:
@@ -99,7 +102,10 @@ app:
     resources:
       requests:
         cpu: 500m
-        memory: 1Gi
+        memory: 512Mi
+      limits:
+        cpu: 3000m
+        memory: 3Gi
 
   worker:
     image:
@@ -107,16 +113,22 @@ app:
     replicaCount: 1
     resources:
       requests:
-        cpu: 250m
+        cpu: 500m
         memory: 512Mi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
 
   migrations:
     image:
       pullPolicy: IfNotPresent
     resources:
       requests:
-        cpu: 125m
+        cpu: 100m
         memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
 
 database:
   external: false
@@ -146,6 +158,9 @@ database:
     requests:
       cpu: 500m
       memory: 1Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
 
 # Redis settings
 redis:
@@ -170,7 +185,10 @@ redis:
     periodSeconds: 5
   resources:
     requests:
-      cpu: 100m
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
       memory: 256Mi
 
 # SMTP email gateway settings

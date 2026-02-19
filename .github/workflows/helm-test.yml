@@ -1,0 +1,30 @@
+name: Helm Chart Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'phase-console/**'
+  push:
+    branches: [ main ]
+    paths:
+      - 'phase-console/**'
+
+jobs:
+  helm-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install helm-unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest.git
+
+      - name: Lint
+        run: helm lint phase-console/
+
+      - name: Run unit tests
+        run: helm unittest phase-console/

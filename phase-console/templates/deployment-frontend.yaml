@@ -6,6 +6,12 @@ metadata:
     {{- include "phase.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.app.frontend.replicaCount }}
+  minReadySeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       {{- include "phase.selectorLabels" . | nindent 6 }}

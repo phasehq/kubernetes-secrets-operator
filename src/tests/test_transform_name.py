@@ -97,19 +97,6 @@ class TestTfVar:
         assert transform_name("API_V2_KEY", "tf-var") == "TF_VAR_api_v2_key"
 
 
-class TestDotnetEnv:
-    """Tests for the 'dotnet-env' nameTransformer (DotNet__Section format)."""
-
-    def test_basic(self):
-        assert transform_name("SECRET_KEY", "dotnet-env") == "Secret__Key"
-
-    def test_single_word(self):
-        assert transform_name("SECRET", "dotnet-env") == "Secret"
-
-    def test_three_words(self):
-        assert transform_name("DB_USER_NAME", "dotnet-env") == "Db__User__Name"
-
-
 class TestLowerKebab:
     """Tests for the 'lower-kebab' nameTransformer (lower-kebab-case output)."""
 

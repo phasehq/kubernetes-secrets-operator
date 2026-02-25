@@ -104,7 +104,6 @@ spec:
                           - "upper-camel"
                           - "lower-snake"
                           - "tf-var"
-                          - "dotnet-env"
                           - "lower-kebab"
                       processors:
                         description: Processors to transform the data during ingestion.

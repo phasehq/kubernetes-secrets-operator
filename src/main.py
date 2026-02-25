@@ -5,11 +5,11 @@ import kubernetes.client
 from kubernetes.client.rest import ApiException
 from kubernetes.client import AppsV1Api
 from kubernetes.client import CoreV1Api
-from cmd.secrets.fetch import phase_secrets_fetch
+from internal.secrets.fetch import phase_secrets_fetch
 from utils.const import REDEPLOY_ANNOTATION
 from utils.sync_state_meta import sync_cache
 from utils.phase_io import Phase
-from utils.misc import phase_get_context
+from utils.misc import phase_get_context, transform_name
 from dateutil import parser
 
 @kopf.daemon('secrets.phase.dev', 'v1alpha1', 'phasesecrets')
@@ -76,7 +76,7 @@ def _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs):
             current_timestamp=target_env_updated_at,
             cr_uid=uid
         )
-        
+
         if not needs_sync:
             logger.info(f"Environment '{phase_app_env}' for app '{phase_app}' has not been updated. No sync needed.")
             return
@@ -192,7 +192,17 @@ def process_secrets(fetched_secrets, processors, secret_type, name_transformer):
     for key, value in fetched_secrets.items():
         processor_info = processors.get(key, {})
         processor_type = processor_info.get('type', 'plain')
-        as_name = processor_info.get('asName', key)  # Use asName for mapping
+
+        # Determine the output key name:
+        # 1. If asName is explicitly set, use it directly
+        # 2. If a per-key nameTransformer is set, apply it
+        # 3. Otherwise, apply the secret-level nameTransformer
+        if 'asName' in processor_info:
+            output_key = processor_info['asName']
+        elif 'nameTransformer' in processor_info:
+            output_key = transform_name(key, processor_info['nameTransformer'])
+        else:
+            output_key = transform_name(key, name_transformer)
 
         # Check and process the value based on the processor type
         if processor_type == 'base64':
@@ -205,8 +215,7 @@ def process_secrets(fetched_secrets, processors, secret_type, name_transformer):
             # Default to plain processing if processor type is not recognized
             processed_value = base64.b64encode(value.encode()).decode()
 
-        # Map the processed value to the asName
-        processed_secrets[as_name] = processed_value
+        processed_secrets[output_key] = processed_value
 
     return processed_secrets
 

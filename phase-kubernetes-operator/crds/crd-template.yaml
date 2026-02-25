@@ -96,6 +96,16 @@ spec:
                           - "kubernetes.io/basic-auth"
                           - "kubernetes.io/ssh-auth"
                           - "bootstrap.kubernetes.io/token"
+                      nameTransformer:
+                        description: Default name transformer applied to all secret keys. Per-key nameTransformer in processors takes precedence.
+                        type: string
+                        enum:
+                          - "camel"
+                          - "upper-camel"
+                          - "lower-snake"
+                          - "tf-var"
+                          - "dotnet-env"
+                          - "lower-kebab"
                       processors:
                         description: Processors to transform the data during ingestion.
                         type: object

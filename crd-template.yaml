@@ -122,7 +122,6 @@ spec:
                                 - "upper-camel"
                                 - "lower-snake"
                                 - "tf-var"
-                                - "dotnet-env"
                                 - "lower-kebab"
                             type:
                               description: The type of process to be performed.

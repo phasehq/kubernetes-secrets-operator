@@ -5,9 +5,9 @@ global:
   version: latest
   images:
     frontend:
-      repository: phasehq/frontend
+      repository: docker.io/phasehq/frontend
     backend:
-      repository: phasehq/backend
+      repository: docker.io/phasehq/backend
   external:
     enabled: false  # DEPRECATED: no longer used by the chart; use `database.external` and `redis.external` instead.
   # Examples:
@@ -144,7 +144,7 @@ database:
   # Path to CA certificate bundle for verifying database TLS certificate
   sslCaPath: ""
   image:
-    repository: postgres
+    repository: docker.io/library/postgres
     tag: 15.4-alpine3.17
   pullPolicy: IfNotPresent
   service:
@@ -174,7 +174,7 @@ redis:
   # Path to CA certificate bundle for Redis SSL verification
   sslCaPath: ""
   image:
-    repository: redis
+    repository: docker.io/library/redis
     tag: alpine3.19
   pullPolicy: IfNotPresent
   service:

@@ -90,7 +90,7 @@ Used by backend, worker, and frontend to ensure migrations complete before the m
 */}}
 {{- define "phase.waitForMigrations" -}}
 - name: wait-for-migrations
-  image: postgres:15.4-alpine3.17
+  image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
   command: ['sh', '-c', 'echo "Waiting for database migrations to complete..."; until psql -h {{ tpl .Values.database.host . }} -p {{ .Values.database.port }} -U {{ .Values.database.user }} -d {{ .Values.database.name }} -c "SELECT 1 FROM django_migrations LIMIT 1;" >/dev/null 2>&1; do echo "Migrations pending - sleeping 5s"; sleep 5; done; echo "Migrations complete!"']
   securityContext:
     allowPrivilegeEscalation: false

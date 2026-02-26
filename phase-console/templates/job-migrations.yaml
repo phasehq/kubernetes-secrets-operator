@@ -33,7 +33,7 @@ spec:
         {{- toYaml .Values.securityContext.pod | nindent 8 }}
       initContainers:
       - name: wait-for-redis
-        image: redis:alpine3.19
+        image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
         command: ['sh', '-c', 'echo "Waiting for Redis at {{ tpl .Values.redis.host . }}:{{ .Values.redis.port }}..."; AUTH_ARGS=""; {{- if .Values.redis.user }} AUTH_ARGS="--user \"${REDIS_USER}\""; {{- end }} until redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }}{{- if .Values.redis.ssl }} --tls{{- end }} $AUTH_ARGS -a "$REDIS_PASSWORD" ping 2>/dev/null || redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }}{{- if .Values.redis.ssl }} --tls{{- end }} $AUTH_ARGS ping; do echo "Redis is unavailable - sleeping 5s"; sleep 5; done; echo "Redis is ready!"']
         securityContext:
           allowPrivilegeEscalation: false
@@ -51,7 +51,7 @@ spec:
           value: {{ .Values.redis.user | quote }}
         {{- end }}
       - name: check-db-ready
-        image: postgres:15.4-alpine3.17
+        image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
         command: ['sh', '-c',
           'echo "Waiting for database at {{ tpl .Values.database.host . }}:{{ .Values.database.port }}...";
           until pg_isready -h {{ tpl .Values.database.host . }} -p {{ .Values.database.port }} -U {{ .Values.database.user }} -t 5;

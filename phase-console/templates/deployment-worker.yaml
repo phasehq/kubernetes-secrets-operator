@@ -32,7 +32,7 @@ spec:
       initContainers:
       {{- include "phase.waitForMigrations" . | nindent 6 }}
       - name: wait-for-redis
-        image: redis:alpine3.19
+        image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
         command: ['sh', '-c', 'echo "Waiting for Redis at {{ tpl .Values.redis.host . }}:{{ .Values.redis.port }}..."; AUTH_ARGS=""; {{- if .Values.redis.user }} AUTH_ARGS="--user \"${REDIS_USER}\""; {{- end }} until redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }}{{- if .Values.redis.ssl }} --tls{{- end }} $AUTH_ARGS -a "$REDIS_PASSWORD" ping 2>/dev/null || redis-cli -h {{ tpl .Values.redis.host . }} -p {{ .Values.redis.port }}{{- if .Values.redis.ssl }} --tls{{- end }} $AUTH_ARGS ping; do echo "Redis is unavailable - sleeping 5s"; sleep 5; done; echo "Redis is ready!"']
         securityContext:
           allowPrivilegeEscalation: false

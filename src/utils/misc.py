@@ -226,7 +226,7 @@ def transform_name(secret_key, format):
 
     Args:
         secret_key (str): The secret key to transform.
-        format (str): The target format ('camel', 'upper-camel', 'lower-snake', 'tf-var', 'dotnet-env', 'lower-kebab').
+        format (str): The target format ('camel', 'upper-camel', 'lower-snake', 'tf-var', 'lower-kebab').
 
     Returns:
         str: The transformed secret key.
@@ -241,8 +241,6 @@ def transform_name(secret_key, format):
         return '_'.join(words)
     elif format == 'tf-var':
         return 'TF_VAR_' + '_'.join(words)
-    elif format == 'dotnet-env':
-        return '__'.join(word.capitalize() for word in words)
     elif format == 'lower-kebab':
         return '-'.join(words)
     else:

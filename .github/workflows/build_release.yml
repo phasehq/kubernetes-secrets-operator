@@ -41,9 +41,9 @@ jobs:
       - name: Build and push (Main branch)
         if: github.ref == 'refs/heads/main'
         run: |
-          docker buildx build --platform linux/amd64,linux/arm64 -t phasehq/kubernetes-operator:latest . --push
+          docker buildx build --platform linux/amd64,linux/arm64 -t phasehq/kubernetes-operator:main . --push
 
       - name: Build and push (Release tag)
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          docker buildx build --platform linux/amd64,linux/arm64 -t phasehq/kubernetes-operator:${{ steps.extract_tag.outputs.tag }} . --push
+          docker buildx build --platform linux/amd64,linux/arm64 -t phasehq/kubernetes-operator:${{ steps.extract_tag.outputs.tag }} -t phasehq/kubernetes-operator:latest . --push

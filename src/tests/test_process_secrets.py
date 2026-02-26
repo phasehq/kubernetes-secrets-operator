@@ -1,4 +1,5 @@
 import base64
+import logging
 import pytest
 from main import process_secrets
 
@@ -513,3 +514,95 @@ class TestEdgeCases:
         )
         assert result["renamed_a"] == b64("value_a")
         assert result["keyB"] == b64("value_b")
+
+
+# ---------------------------------------------------------------------------
+# Key collision warning logging
+# ---------------------------------------------------------------------------
+
+class TestCollisionWarningLogging:
+    """Tests that key collisions emit a warning log message."""
+
+    def test_transformer_collision_logs_warning(self, caplog):
+        """Two source keys mapping to the same output via nameTransformer should log a warning."""
+        with caplog.at_level(logging.WARNING, logger="main"):
+            process_secrets(
+                {"SECRET_KEY": "first", "secret_key": "second"},
+                processors={},
+                secret_type="Opaque",
+                name_transformer="camel",
+            )
+        collision_warnings = [r for r in caplog.records if "Key collision" in r.message]
+        assert len(collision_warnings) == 1
+        assert "secretKey" in collision_warnings[0].message
+
+    def test_asname_collision_logs_warning(self, caplog):
+        """Two keys with asName mapping to the same output should log a warning."""
+        with caplog.at_level(logging.WARNING, logger="main"):
+            process_secrets(
+                {"KEY_A": "val_a", "KEY_B": "val_b"},
+                processors={
+                    "KEY_A": {"asName": "same_name"},
+                    "KEY_B": {"asName": "same_name"},
+                },
+                secret_type="Opaque",
+                name_transformer="upper_snake",
+            )
+        collision_warnings = [r for r in caplog.records if "Key collision" in r.message]
+        assert len(collision_warnings) == 1
+        assert "same_name" in collision_warnings[0].message
+
+    def test_no_collision_no_warning(self, caplog):
+        """No collision should produce no warning."""
+        with caplog.at_level(logging.WARNING, logger="main"):
+            process_secrets(
+                {"KEY_A": "val_a", "KEY_B": "val_b"},
+                processors={},
+                secret_type="Opaque",
+                name_transformer="camel",
+            )
+        collision_warnings = [r for r in caplog.records if "Key collision" in r.message]
+        assert len(collision_warnings) == 0
+
+    def test_collision_warning_mentions_both_source_keys(self, caplog):
+        """The warning message should reference both conflicting source keys."""
+        with caplog.at_level(logging.WARNING, logger="main"):
+            process_secrets(
+                {"KEY_A": "val_a", "KEY_B": "val_b"},
+                processors={
+                    "KEY_A": {"asName": "collided"},
+                    "KEY_B": {"asName": "collided"},
+                },
+                secret_type="Opaque",
+                name_transformer="upper_snake",
+            )
+        collision_warnings = [r for r in caplog.records if "Key collision" in r.message]
+        assert len(collision_warnings) == 1
+        msg = collision_warnings[0].message
+        assert "KEY_A" in msg
+        assert "KEY_B" in msg
+
+    def test_collision_warning_is_warning_level(self, caplog):
+        """Collision logs should be at WARNING level."""
+        with caplog.at_level(logging.DEBUG, logger="main"):
+            process_secrets(
+                {"SECRET_KEY": "first", "secret_key": "second"},
+                processors={},
+                secret_type="Opaque",
+                name_transformer="camel",
+            )
+        collision_warnings = [r for r in caplog.records if "Key collision" in r.message]
+        assert len(collision_warnings) == 1
+        assert collision_warnings[0].levelno == logging.WARNING
+
+    def test_multiple_collisions_log_multiple_warnings(self, caplog):
+        """Each collision should produce its own warning."""
+        with caplog.at_level(logging.WARNING, logger="main"):
+            process_secrets(
+                {"A_B": "1", "a_b": "2", "C_D": "3", "c_d": "4"},
+                processors={},
+                secret_type="Opaque",
+                name_transformer="camel",
+            )
+        collision_warnings = [r for r in caplog.records if "Key collision" in r.message]
+        assert len(collision_warnings) == 2

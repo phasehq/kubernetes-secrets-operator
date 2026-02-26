@@ -1,4 +1,5 @@
 import kopf
+import logging
 import base64
 import datetime
 import kubernetes.client
@@ -11,6 +12,8 @@ from utils.sync_state_meta import sync_cache
 from utils.phase_io import Phase
 from utils.misc import phase_get_context, transform_name
 from dateutil import parser
+
+logger = logging.getLogger(__name__)
 
 @kopf.daemon('secrets.phase.dev', 'v1alpha1', 'phasesecrets')
 def phase_secret_sync(spec, name, namespace, logger, uid, stopped, **kwargs):
@@ -189,6 +192,7 @@ def patch_deployment_for_redeploy(deployment, namespace, apps_v1_api, logger):
 
 def process_secrets(fetched_secrets, processors, secret_type, name_transformer):
     processed_secrets = {}
+    output_key_sources = {}  # Track which source key mapped to each output key
     for key, value in fetched_secrets.items():
         processor_info = processors.get(key, {})
         processor_type = processor_info.get('type', 'plain')
@@ -203,6 +207,14 @@ def process_secrets(fetched_secrets, processors, secret_type, name_transformer):
             output_key = transform_name(key, processor_info['nameTransformer'])
         else:
             output_key = transform_name(key, name_transformer)
+
+        # Detect output key collisions
+        if output_key in output_key_sources:
+            logger.warning(
+                f"Key collision: '{key}' and '{output_key_sources[output_key]}' "
+                f"both map to output key '{output_key}'. '{key}' will overwrite the previous value."
+            )
+        output_key_sources[output_key] = key
 
         # Check and process the value based on the processor type
         if processor_type == 'base64':

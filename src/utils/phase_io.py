@@ -193,6 +193,8 @@ class Phase:
         
         if resolved_context:
             app_name, app_id, env_name, env_id, public_key = resolved_context
+            if user_data is None:
+                raise ValueError("user_data is required when resolved_context is provided")
         else:
             if user_data is None:
                 self._track_api_call()

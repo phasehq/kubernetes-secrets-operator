@@ -9,6 +9,7 @@ spec:
   phaseAppEnvPath: "/" # OPTIONAL Path within the Phase application environment to fetch secrets from
   phaseHost: "https://console.phase.dev" # OPTIONAL - URL of a Phase Console instance
   pollingInterval: 5 # OPTIONAL - Interval in seconds to poll for secret updates. Default is 60 seconds.
+  redeployLabelSelector: "" # OPTIONAL - Label selector to reduce deployment scan scope when triggering redeploys.
   authentication:
     serviceToken:
       serviceTokenSecretReference:

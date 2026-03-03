@@ -14,5 +14,5 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 RUN adduser -D operator-usr
 USER operator-usr
 
-# Run the operator script using Kopf
-CMD ["kopf", "run", "/app/main.py"]
+# Run the operator script using Kopf cluster-wide
+CMD ["kopf", "run", "--all-namespaces", "/app/main.py"]

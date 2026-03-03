@@ -27,6 +27,9 @@ operator:
   env:
     PHASE_VERIFY_SSL: True
     PHASE_DEBUG: False
+    PHASE_HTTP_TIMEOUT: "10"
+    PHASE_HTTP_RETRIES: "2"
+    PHASE_HTTP_BACKOFF: "0.3"
   resources:
     limits:
       cpu: 200m

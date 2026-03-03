@@ -183,8 +183,6 @@ spec:
                         description: Type of condition in CamelCase.
                         type: string
                         maxLength: 316
-              required:
-                - conditions
       served: true
       storage: true
       subresources:

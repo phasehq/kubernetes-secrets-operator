@@ -95,6 +95,7 @@ spec:
   managedSecretReferences:
     - secretName: "my-application-secret" # Name of the Kubernetes managed secret that Phase will sync
       secretNamespace: "default"
+  redeployLabelSelector: "app.kubernetes.io/part-of=my-app" # OPTIONAL - limit deployment scan scope for redeploy checks
 ```
 
 Deploy the custom resource:
@@ -179,5 +180,5 @@ kubectl apply -f dev-cr.yaml
 7. Start the operator via Kopf
 
 ```fish
-kopf run src/main.py
+kopf run --all-namespaces src/main.py
 ```

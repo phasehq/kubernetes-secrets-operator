@@ -73,6 +73,20 @@ class Phase:
         else:
             self._token_type = "Service" if self.is_service_token else "User"
 
+        self._api_call_count = 0
+
+
+    def _track_api_call(self):
+        self._api_call_count += 1
+
+
+    def get_api_call_count(self) -> int:
+        return self._api_call_count
+
+
+    def reset_api_call_count(self):
+        self._api_call_count = 0
+
 
     def _find_matching_environment_key(self, user_data, env_id):
         for app in user_data.get("apps", []):
@@ -84,6 +98,7 @@ class Phase:
 
     def auth(self):
         try:
+            self._track_api_call()
             key = fetch_app_key(
                 self._token_type, self._app_secret.app_token, self._api_host)
 
@@ -94,6 +109,7 @@ class Phase:
 
 
     def init(self):
+        self._track_api_call()
         response = fetch_phase_user(self._token_type, self._app_secret.app_token, self._api_host)
 
         # Ensure the response is OK
@@ -150,7 +166,16 @@ class Phase:
         return create_phase_secrets(self._token_type, self._app_secret.app_token, env_id, secrets, self._api_host)
 
 
-    def get(self, env_name: str, keys: List[str] = None, app_name: str = None, tag: str = None, path: str = '/') -> List[Dict]:
+    def get(
+        self,
+        env_name: str,
+        keys: Optional[List[str]] = None,
+        app_name: Optional[str] = None,
+        tag: Optional[str] = None,
+        path: str = '/',
+        user_data: Optional[Dict] = None,
+        resolved_context: Optional[Tuple[str, str, str, str, str]] = None,
+    ) -> List[Dict]:
         """
         Get secrets from Phase KMS based on key and environment, with support for personal overrides,
         optional tag matching, decrypting comments, and now including path support and key digest optimization.
@@ -166,12 +191,19 @@ class Phase:
             List[Dict]: A list of dictionaries for all secrets in the environment that match the criteria, including their paths.
         """
         
-        user_response = fetch_phase_user(self._token_type, self._app_secret.app_token, self._api_host)
-        if user_response.status_code != 200:
-            raise ValueError(f"Request failed with status code {user_response.status_code}: {user_response.text}")
+        if resolved_context:
+            app_name, app_id, env_name, env_id, public_key = resolved_context
+            if user_data is None:
+                raise ValueError("user_data is required when resolved_context is provided")
+        else:
+            if user_data is None:
+                self._track_api_call()
+                user_response = fetch_phase_user(self._token_type, self._app_secret.app_token, self._api_host)
+                if user_response.status_code != 200:
+                    raise ValueError(f"Request failed with status code {user_response.status_code}: {user_response.text}")
+                user_data = user_response.json()
 
-        user_data = user_response.json()
-        app_name, app_id, env_name, env_id, public_key = phase_get_context(user_data, app_name=app_name, env_name=env_name)
+            app_name, app_id, env_name, env_id, public_key = phase_get_context(user_data, app_name=app_name, env_name=env_name)
 
         environment_key = self._find_matching_environment_key(user_data, env_id)
         if environment_key is None:
@@ -190,6 +222,7 @@ class Phase:
             key_digest = CryptoUtils.blake2b_digest(keys[0], decrypted_salt)
             params["key_digest"] = key_digest
 
+        self._track_api_call()
         secrets_response = fetch_phase_secrets(self._token_type, self._app_secret.app_token, env_id, self._api_host, **params)
 
         secrets_data = secrets_response.json()

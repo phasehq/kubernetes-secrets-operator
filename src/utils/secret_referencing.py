@@ -78,7 +78,28 @@ def split_path_and_key(ref: str) -> tuple:
     return path, key_name
 
 
-def resolve_secret_reference(ref: str, secrets_dict: Dict[str, Dict[str, Dict[str, str]]], phase: 'Phase', current_application_name: str, current_env_name: str) -> str:
+def build_secrets_index(all_secrets: List[Dict[str, str]]) -> Dict[str, Dict[str, Dict[str, str]]]:
+    secrets_dict: Dict[str, Dict[str, Dict[str, str]]] = {}
+    for secret in all_secrets:
+        env_name = secret['environment']
+        path = secret['path']
+        key = secret['key']
+        if env_name not in secrets_dict:
+            secrets_dict[env_name] = {}
+        if path not in secrets_dict[env_name]:
+            secrets_dict[env_name][path] = {}
+        secrets_dict[env_name][path][key] = secret['value']
+    return secrets_dict
+
+
+def resolve_secret_reference(
+    ref: str,
+    secrets_dict: Dict[str, Dict[str, Dict[str, str]]],
+    phase: 'Phase',
+    current_application_name: str,
+    current_env_name: str,
+    fetch_cache: Dict[str, str] = None,
+) -> str:
     """
     Resolves a single secret reference to its actual value by fetching it from the specified environment.
     
@@ -128,9 +149,15 @@ def resolve_secret_reference(ref: str, secrets_dict: Dict[str, Dict[str, Dict[st
                 return secrets_dict[env_name]['/'][key_name]
 
         # If the secret is not found in secrets_dict, try to fetch it from Phase
+        fetch_key = f"{app_name}:{env_name}:{path}:{key_name}"
+        if fetch_cache is not None and fetch_key in fetch_cache:
+            return fetch_cache[fetch_key]
+
         fetched_secrets = phase.get(env_name=env_name, app_name=app_name, keys=[key_name], path=path)
         for secret in fetched_secrets:
             if secret["key"] == key_name:
+                if fetch_cache is not None:
+                    fetch_cache[fetch_key] = secret["value"]
                 return secret["value"]
     except EnvironmentNotFoundException:
         pass
@@ -139,7 +166,15 @@ def resolve_secret_reference(ref: str, secrets_dict: Dict[str, Dict[str, Dict[st
     return f"${{{original_ref}}}"
 
 
-def resolve_all_secrets(value: str, all_secrets: List[Dict[str, str]], phase: 'Phase', current_application_name: str, current_env_name: str) -> str:
+def resolve_all_secrets(
+    value: str,
+    all_secrets: List[Dict[str, str]],
+    phase: 'Phase',
+    current_application_name: str,
+    current_env_name: str,
+    secrets_dict: Dict[str, Dict[str, Dict[str, str]]] = None,
+    fetch_cache: Dict[str, str] = None,
+) -> str:
     """
     Resolves all secret references within a given string to their actual values.
     
@@ -158,22 +193,21 @@ def resolve_all_secrets(value: str, all_secrets: List[Dict[str, str]], phase: 'P
         str: The input string with all secret references resolved to their actual values.
     """
 
-    secrets_dict = {}
-    for secret in all_secrets:
-        env_name = secret['environment']
-        path = secret['path']
-        key = secret['key']
-        if env_name not in secrets_dict:
-            secrets_dict[env_name] = {}
-        if path not in secrets_dict[env_name]:
-            secrets_dict[env_name][path] = {}
-        secrets_dict[env_name][path][key] = secret['value']
+    if secrets_dict is None:
+        secrets_dict = build_secrets_index(all_secrets)
     
     refs = SECRET_REF_REGEX.findall(value)
     resolved_value = value
     # Resolve each found reference and replace it with resolved_secret_value.
     for ref in refs:
-        resolved_secret_value = resolve_secret_reference(ref, secrets_dict, phase, current_application_name, current_env_name)
+        resolved_secret_value = resolve_secret_reference(
+            ref,
+            secrets_dict,
+            phase,
+            current_application_name,
+            current_env_name,
+            fetch_cache=fetch_cache,
+        )
         resolved_value = resolved_value.replace(f"${{{ref}}}", resolved_secret_value)
     
     return resolved_value

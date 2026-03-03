@@ -2,6 +2,8 @@ import kopf
 import logging
 import base64
 import datetime
+import time
+import random
 import kubernetes.client
 from kubernetes.client.rest import ApiException
 from kubernetes.client import AppsV1Api
@@ -15,23 +17,56 @@ from dateutil import parser
 
 logger = logging.getLogger(__name__)
 
+
+@kopf.on.startup()
+def configure(settings: kopf.OperatorSettings, **_):
+    # Ensure enough worker capacity when many PhaseSecret daemons run in parallel.
+    settings.execution.max_workers = 50
+
 @kopf.daemon('secrets.phase.dev', 'v1alpha1', 'phasesecrets')
 def phase_secret_sync(spec, name, namespace, logger, uid, stopped, **kwargs):
+    first_iteration = True
+
     while not stopped:
         polling_interval = max(spec.get('pollingInterval', 60), 5)
+
+        if first_iteration:
+            startup_jitter_seconds = min(max(polling_interval * 0.2, 1), 5)
+            jitter_sleep = random.uniform(0, startup_jitter_seconds)
+            if jitter_sleep > 0:
+                logger.debug(
+                    f"Applying startup jitter for PhaseSecret {name}: {jitter_sleep:.2f}s "
+                    f"(max={startup_jitter_seconds:.2f}s)"
+                )
+                if stopped.wait(jitter_sleep):
+                    break
+            first_iteration = False
+
+        cycle_start = time.monotonic()
+        cycle_status = "unknown"
+        phase_api_calls = 0
         
         try:
-            _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs)
+            result = _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs)
+            cycle_status = result.get("status", "unknown")
+            phase_api_calls = result.get("phase_api_calls", 0)
         except Exception as e:
+            cycle_status = "error"
             logger.error(
                 f"Unexpected error in daemon while syncing PhaseSecret {name} in namespace {namespace}: {e}"
             )
         
         # Wait for the next poll
+        cycle_duration = time.monotonic() - cycle_start
+        logger.info(
+            f"Sync cycle status={cycle_status} for PhaseSecret {name} in namespace {namespace}; "
+            f"duration_s={cycle_duration:.3f}; phase_api_calls={phase_api_calls}"
+        )
         if stopped.wait(polling_interval):
             break
 
 def _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs):
+    phase = None
     try:
         api_instance = CoreV1Api()
         managed_secret_references = spec.get('managedSecretReferences', [])
@@ -40,6 +75,7 @@ def _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs):
         phase_app_env = spec.get('phaseAppEnv', 'production')
         phase_app_env_path = spec.get('phaseAppEnvPath', '/')
         phase_app_env_tag = spec.get('phaseAppEnvTag')
+        redeploy_label_selector = spec.get('redeployLabelSelector')
         service_token_secret_name = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretName', 'phase-service-token')
         service_token_secret_namespace = spec.get('authentication', {}).get('serviceToken', {}).get('serviceTokenSecretReference', {}).get('secretNamespace', namespace)
 
@@ -49,28 +85,30 @@ def _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs):
         # Initialize Phase client to fetch account access metadata and check timestamps
         try:
             phase = Phase(init=False, pss=service_token, host=phase_host)
+            phase.reset_api_call_count()
             
             # Fetch account access metadata to get environment timestamps
             user_data = phase.init()
         except Exception as e:
             logger.error(f"Failed to fetch user data from Phase API: {e}")
             # On user data fetch failure, we can't determine if sync is needed, skip this cycle
-            return
+            return {"status": "fetch_user_error", "phase_api_calls": phase.get_api_call_count() if phase else 0}
         
         # Parse the app and environment context
         try:
             app_name, app_id, env_name, env_id, public_key, updated_at_str = phase_get_context(
                 user_data, app_name=phase_app, env_name=phase_app_env, include_timestamp=True
             )
+            resolved_context = (app_name, app_id, env_name, env_id, public_key)
             
             # Parse the updated_at timestamp
             target_env_updated_at = parser.parse(updated_at_str)
         except ValueError as e:
             logger.error(f"Failed to get app/environment context: {e}")
-            return
+            return {"status": "context_error", "phase_api_calls": phase.get_api_call_count() if phase else 0}
         except Exception as e:
             logger.error(f"Failed to parse timestamp for environment '{phase_app_env}': {e}")
-            return
+            return {"status": "timestamp_error", "phase_api_calls": phase.get_api_call_count() if phase else 0}
         
         # Check if we need to sync based on timestamp
         needs_sync = sync_cache.needs_sync(
@@ -81,8 +119,8 @@ def _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs):
         )
 
         if not needs_sync:
-            logger.info(f"Environment '{phase_app_env}' for app '{phase_app}' has not been updated. No sync needed.")
-            return
+            logger.debug(f"Environment '{phase_app_env}' for app '{phase_app}' has not been updated. No sync needed.")
+            return {"status": "no_sync_needed", "phase_api_calls": phase.get_api_call_count() if phase else 0}
         
         # Environment has been updated, fetch secrets
         logger.info(f"Environment '{phase_app_env}' has been updated, fetching secrets")
@@ -95,12 +133,15 @@ def _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs):
                 phase_app=phase_app,
                 env_name=phase_app_env,
                 tags=phase_app_env_tag,
-                path=phase_app_env_path
+                path=phase_app_env_path,
+                phase_client=phase,
+                user_data=user_data,
+                resolved_context=resolved_context,
             )
         except Exception as e:
             logger.error(f"Failed to fetch secrets from Phase API for app '{phase_app}' environment '{phase_app_env}': {e}")
             # Don't update cache on fetch failure, retry on next cycle
-            return
+            return {"status": "fetch_secrets_error", "phase_api_calls": phase.get_api_call_count() if phase else 0}
 
 
         secret_changed = False
@@ -116,19 +157,26 @@ def _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs):
             try:
                 existing_secret = api_instance.read_namespaced_secret(name=secret_name, namespace=secret_namespace)
                 if existing_secret.type != secret_type or existing_secret.data != processed_secrets:
-                    api_instance.delete_namespaced_secret(name=secret_name, namespace=secret_namespace)
-                    create_secret(api_instance, secret_name, secret_namespace, secret_type, processed_secrets, logger)
+                    upsert_secret(
+                        api_instance,
+                        secret_name,
+                        secret_namespace,
+                        secret_type,
+                        processed_secrets,
+                        logger,
+                        existing_secret=existing_secret,
+                    )
                     secret_changed = True
             except ApiException as e:
                 if e.status == 404:
-                    create_secret(api_instance, secret_name, secret_namespace, secret_type, processed_secrets, logger)
+                    upsert_secret(api_instance, secret_name, secret_namespace, secret_type, processed_secrets, logger)
                     secret_changed = True
                 else:
                     logger.error(f"Failed to update secret {secret_name} in namespace {secret_namespace}: {e}")
 
         if secret_changed:
             affected_secrets = [ref['secretName'] for ref in managed_secret_references]
-            redeploy_affected_deployments(namespace, affected_secrets, logger, api_instance)
+            redeploy_affected_deployments(namespace, affected_secrets, logger, api_instance, label_selector=redeploy_label_selector)
 
         # Update sync metadata timestamp
         sync_cache.update_sync_time(
@@ -138,17 +186,22 @@ def _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs):
             cr_uid=uid
         )
         
-        logger.info(f"Secrets for PhaseSecret {name} have been successfully updated in namespace {namespace}")
+        return {
+            "status": "synced" if secret_changed else "no_secret_change",
+            "phase_api_calls": phase.get_api_call_count() if phase else 0,
+        }
 
     except ApiException as e:
         logger.error(f"Failed to fetch secrets for PhaseSecret {name} in namespace {namespace}: {e}")
+        return {"status": "k8s_api_error", "phase_api_calls": phase.get_api_call_count() if phase else 0}
     except Exception as e:
         logger.error(f"Unexpected error when handling PhaseSecret {name} in namespace {namespace}: {e}")
+        return {"status": "unexpected_error", "phase_api_calls": phase.get_api_call_count() if phase else 0}
 
-def redeploy_affected_deployments(namespace, affected_secrets, logger, api_instance):
+def redeploy_affected_deployments(namespace, affected_secrets, logger, api_instance, label_selector=None):
     try:
         apps_v1_api = AppsV1Api(api_instance.api_client)
-        deployments = apps_v1_api.list_namespaced_deployment(namespace)
+        deployments = apps_v1_api.list_namespaced_deployment(namespace, label_selector=label_selector)
         for deployment in deployments.items:
             if should_redeploy(deployment, affected_secrets):
                 patch_deployment_for_redeploy(deployment, namespace, apps_v1_api, logger)
@@ -231,17 +284,30 @@ def process_secrets(fetched_secrets, processors, secret_type, name_transformer):
 
     return processed_secrets
 
-def create_secret(api_instance, secret_name, secret_namespace, secret_type, secret_data, logger):
+def upsert_secret(api_instance, secret_name, secret_namespace, secret_type, secret_data, logger, existing_secret=None):
     try:
-        response = api_instance.create_namespaced_secret(
-            namespace=secret_namespace,
-            body=kubernetes.client.V1Secret(
-                metadata=kubernetes.client.V1ObjectMeta(name=secret_name),
-                type=secret_type,
-                data=secret_data
+        secret_body = kubernetes.client.V1Secret(
+            metadata=kubernetes.client.V1ObjectMeta(name=secret_name),
+            type=secret_type,
+            data=secret_data,
+        )
+
+        if existing_secret is None:
+            response = api_instance.create_namespaced_secret(
+                namespace=secret_namespace,
+                body=secret_body,
             )
+            if response:
+                logger.info(f"Created secret {secret_name} in namespace {secret_namespace}")
+            return
+
+        secret_body.metadata.resource_version = existing_secret.metadata.resource_version
+        response = api_instance.replace_namespaced_secret(
+            name=secret_name,
+            namespace=secret_namespace,
+            body=secret_body,
         )
         if response:
-            logger.info(f"Created secret {secret_name} in namespace {secret_namespace}")
+            logger.info(f"Updated secret {secret_name} in namespace {secret_namespace}")
     except ApiException as e:
-        logger.error(f"Failed to create secret {secret_name} in namespace {secret_namespace}: {e}")
+        logger.error(f"Failed to upsert secret {secret_name} in namespace {secret_namespace}: {e}")

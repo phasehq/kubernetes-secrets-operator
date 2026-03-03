@@ -135,6 +135,9 @@ spec:
                   type: integer
                   default: 60
                   minimum: 5
+                redeployLabelSelector:
+                  description: Optional Kubernetes label selector used to limit deployment scans during redeploy checks.
+                  type: string
               required:
                 - phaseApp
                 - managedSecretReferences
@@ -183,8 +186,6 @@ spec:
                         description: Type of condition in CamelCase.
                         type: string
                         maxLength: 316
-              required:
-                - conditions
       served: true
       storage: true
       subresources:

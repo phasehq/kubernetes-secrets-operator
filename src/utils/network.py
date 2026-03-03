@@ -1,8 +1,12 @@
 import os
 import requests
+import urllib3
 from utils.misc import get_user_agent
 from typing import List
 from typing import Dict
+from typing import NoReturn
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # Check if SSL verification should be skipped
 VERIFY_SSL = os.environ.get('PHASE_VERIFY_SSL', 'True').lower() != 'false'
@@ -10,9 +14,32 @@ VERIFY_SSL = os.environ.get('PHASE_VERIFY_SSL', 'True').lower() != 'false'
 # Check if debug mode is enabled
 PHASE_DEBUG = os.environ.get('PHASE_DEBUG', 'False').lower() == 'true'
 
+PHASE_HTTP_TIMEOUT = float(os.environ.get('PHASE_HTTP_TIMEOUT', '10'))
+PHASE_HTTP_RETRIES = int(os.environ.get('PHASE_HTTP_RETRIES', '2'))
+PHASE_HTTP_BACKOFF = float(os.environ.get('PHASE_HTTP_BACKOFF', '0.3'))
+
+
+def _build_http_session() -> requests.Session:
+    session = requests.Session()
+    retries = Retry(
+        total=PHASE_HTTP_RETRIES,
+        connect=PHASE_HTTP_RETRIES,
+        read=PHASE_HTTP_RETRIES,
+        backoff_factor=PHASE_HTTP_BACKOFF,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=("GET", "POST", "PUT", "DELETE"),
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+
+HTTP_SESSION = _build_http_session()
+
 # Suppress InsecureRequestWarning if SSL verification is skipped
 if not VERIFY_SSL:
-    requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def handle_request_errors(response: requests.Response) -> None:
@@ -34,7 +61,7 @@ def handle_request_errors(response: requests.Response) -> None:
         raise Exception(error_message)
 
 
-def handle_connection_error(e: Exception) -> None:
+def handle_connection_error(e: Exception) -> NoReturn:
     """
     Handle ConnectionError exceptions.
 
@@ -47,7 +74,7 @@ def handle_connection_error(e: Exception) -> None:
     raise Exception(error_message)
 
 
-def handle_ssl_error(e: Exception) -> None:
+def handle_ssl_error(e: Exception) -> NoReturn:
     """
     Handle SSLError exceptions.
 
@@ -55,6 +82,13 @@ def handle_ssl_error(e: Exception) -> None:
         e (Exception): The exception to handle.
     """
     error_message = "🗿 SSL error: The Phase Console is using an invalid/expired or a self-signed certificate."
+    if PHASE_DEBUG:
+        error_message += f" Detail: {str(e)}"
+    raise Exception(error_message)
+
+
+def handle_timeout_error(e: Exception) -> NoReturn:
+    error_message = f"🗿 Request timed out after {PHASE_HTTP_TIMEOUT}s while connecting to Phase API."
     if PHASE_DEBUG:
         error_message += f" Detail: {str(e)}"
     raise Exception(error_message)
@@ -93,13 +127,15 @@ def fetch_phase_user(token_type: str, app_token: str, host: str) -> requests.Res
     URL =  f"{host}/service/secrets/tokens/"
 
     try:
-        response = requests.get(URL, headers=headers, verify=VERIFY_SSL)
+        response = HTTP_SESSION.get(URL, headers=headers, verify=VERIFY_SSL, timeout=PHASE_HTTP_TIMEOUT)
         handle_request_errors(response)
         return response
-    except requests.exceptions.ConnectionError as e:
-        handle_connection_error(e)
     except requests.exceptions.SSLError as e:
         handle_ssl_error(e)
+    except requests.exceptions.Timeout as e:
+        handle_timeout_error(e)
+    except requests.exceptions.ConnectionError as e:
+        handle_connection_error(e)
 
 def fetch_app_key(token_type: str, app_token, host) -> str:
     """
@@ -119,7 +155,7 @@ def fetch_app_key(token_type: str, app_token, host) -> str:
 
     URL =  f"{host}/service/secrets/tokens/"
 
-    response = requests.get(URL, headers=headers, verify=VERIFY_SSL)
+    response = HTTP_SESSION.get(URL, headers=headers, verify=VERIFY_SSL, timeout=PHASE_HTTP_TIMEOUT)
 
     if response.status_code != 200:
         raise ValueError(f"Request failed with status code {response.status_code}: {response.text}")
@@ -159,7 +195,7 @@ def fetch_wrapped_key_share(token_type: str, app_token: str, host: str) -> str:
 
     URL = f"{host}/service/secrets/tokens/"
 
-    response = requests.get(URL, headers=headers, verify=VERIFY_SSL)
+    response = HTTP_SESSION.get(URL, headers=headers, verify=VERIFY_SSL, timeout=PHASE_HTTP_TIMEOUT)
 
     if response.status_code != 200:
         raise ValueError(f"Request failed with status code {response.status_code}: {response.text}")
@@ -202,13 +238,15 @@ def fetch_phase_secrets(token_type: str, app_token: str, id: str, host: str, key
     URL = f"{host}/service/secrets/"
 
     try:
-        response = requests.get(URL, headers=headers, verify=VERIFY_SSL)
+        response = HTTP_SESSION.get(URL, headers=headers, verify=VERIFY_SSL, timeout=PHASE_HTTP_TIMEOUT)
         handle_request_errors(response)
         return response
-    except requests.exceptions.ConnectionError as e:
-        handle_connection_error(e)
     except requests.exceptions.SSLError as e:
         handle_ssl_error(e)
+    except requests.exceptions.Timeout as e:
+        handle_timeout_error(e)
+    except requests.exceptions.ConnectionError as e:
+        handle_connection_error(e)
 
 
 def create_phase_secrets(token_type: str, app_token: str, environment_id: str, secrets: List[dict], host: str) -> requests.Response:
@@ -233,13 +271,15 @@ def create_phase_secrets(token_type: str, app_token: str, environment_id: str, s
     URL =  f"{host}/service/secrets/"
 
     try:
-        response = requests.post(URL, headers=headers, json=data, verify=VERIFY_SSL)
+        response = HTTP_SESSION.post(URL, headers=headers, json=data, verify=VERIFY_SSL, timeout=PHASE_HTTP_TIMEOUT)
         handle_request_errors(response)
         return response
-    except requests.exceptions.ConnectionError as e:
-        handle_connection_error(e)
     except requests.exceptions.SSLError as e:
         handle_ssl_error(e)
+    except requests.exceptions.Timeout as e:
+        handle_timeout_error(e)
+    except requests.exceptions.ConnectionError as e:
+        handle_connection_error(e)
 
 
 def update_phase_secrets(token_type: str, app_token: str, environment_id: str, secrets: List[dict], host: str) -> requests.Response:
@@ -264,13 +304,15 @@ def update_phase_secrets(token_type: str, app_token: str, environment_id: str, s
     URL =  f"{host}/service/secrets/"
 
     try:
-        response = requests.put(URL, headers=headers, json=data, verify=VERIFY_SSL)
+        response = HTTP_SESSION.put(URL, headers=headers, json=data, verify=VERIFY_SSL, timeout=PHASE_HTTP_TIMEOUT)
         handle_request_errors(response)
         return response
-    except requests.exceptions.ConnectionError as e:
-        handle_connection_error(e)
     except requests.exceptions.SSLError as e:
         handle_ssl_error(e)
+    except requests.exceptions.Timeout as e:
+        handle_timeout_error(e)
+    except requests.exceptions.ConnectionError as e:
+        handle_connection_error(e)
 
 
 def delete_phase_secrets(token_type: str, app_token: str, environment_id: str, secret_ids: List[str], host: str) -> requests.Response:
@@ -295,10 +337,12 @@ def delete_phase_secrets(token_type: str, app_token: str, environment_id: str, s
     URL =  f"{host}/service/secrets/"
 
     try:
-        response = requests.delete(URL, headers=headers, json=data, verify=VERIFY_SSL)
+        response = HTTP_SESSION.delete(URL, headers=headers, json=data, verify=VERIFY_SSL, timeout=PHASE_HTTP_TIMEOUT)
         handle_request_errors(response)
         return response
-    except requests.exceptions.ConnectionError as e:
-        handle_connection_error(e)
     except requests.exceptions.SSLError as e:
         handle_ssl_error(e)
+    except requests.exceptions.Timeout as e:
+        handle_timeout_error(e)
+    except requests.exceptions.ConnectionError as e:
+        handle_connection_error(e)

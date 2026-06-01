@@ -1,0 +1,23 @@
+suite: ConfigMap auth env
+templates:
+  - configmap.yaml
+tests:
+  - it: enables password auth by default (ENABLE_PASSWORD_AUTH=true)
+    asserts:
+      - equal:
+          path: data.ENABLE_PASSWORD_AUTH
+          value: "true"
+
+  - it: passes ENABLE_PASSWORD_AUTH=false when disabled
+    set:
+      passwordAuth.enabled: false
+    asserts:
+      - equal:
+          path: data.ENABLE_PASSWORD_AUTH
+          value: "false"
+
+  - it: defaults SSO_PROVIDERS to empty (password-only out of the box)
+    asserts:
+      - equal:
+          path: data.SSO_PROVIDERS
+          value: ""

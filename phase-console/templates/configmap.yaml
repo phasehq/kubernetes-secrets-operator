@@ -14,6 +14,7 @@ data:
   HOST: {{ .Values.global.host | quote }}
   HTTP_PROTOCOL: {{ .Values.global.httpProtocol | quote }}
   SSO_PROVIDERS: {{ .Values.sso.providers | quote }}
+  ENABLE_PASSWORD_AUTH: {{ .Values.passwordAuth.enabled | quote }}
   DATABASE_HOST: {{ tpl .Values.database.host . | quote }}
   DATABASE_PORT: {{ .Values.database.port | quote }}
   DATABASE_NAME: {{ .Values.database.name | quote }}

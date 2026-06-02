@@ -26,7 +26,15 @@ global:
     #     redis.external = true
 
 sso:
-  providers: "google,github,gitlab"
+  # Single sign-on providers shown on the sign-in page (optional). Leave empty
+  # for password-only sign-in. To enable, set a comma-separated list of slugs,
+  # e.g. providers: "google,github,gitlab". Provider list & required credentials:
+  # https://docs.phase.dev/self-hosting/configuration/envars#single-sign-on-sso
+  providers: ""
+
+# Email + password authentication. Sets ENABLE_PASSWORD_AUTH. Enabled by default.
+passwordAuth:
+  enabled: true
 
 # Docs: https://docs.phase.dev/self-hosting/configuration/envars
 phaseSecrets: phase-console-secret

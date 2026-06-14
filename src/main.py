@@ -1,3 +1,4 @@
+import asyncio
 import kopf
 import logging
 import base64
@@ -16,20 +17,29 @@ from dateutil import parser
 logger = logging.getLogger(__name__)
 
 @kopf.daemon('secrets.phase.dev', 'v1alpha1', 'phasesecrets')
-def phase_secret_sync(spec, name, namespace, logger, uid, stopped, **kwargs):
+async def phase_secret_sync(spec, name, namespace, logger, uid, stopped, **kwargs):
     while not stopped:
         polling_interval = max(spec.get('pollingInterval', 60), 5)
-        
+
         try:
-            _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs)
+            # _phase_sync_secrets does blocking K8s/Phase API I/O. Offload it to a
+            # worker thread so the daemon coroutine itself never pins a pool thread
+            # for the whole pollingInterval. This keeps concurrency proportional to
+            # active sync work rather than to the total number of PhaseSecret CRs.
+            await asyncio.to_thread(
+                _phase_sync_secrets, spec, name, namespace, logger, uid, **kwargs
+            )
         except Exception as e:
             logger.error(
                 f"Unexpected error in daemon while syncing PhaseSecret {name} in namespace {namespace}: {e}"
             )
-        
-        # Wait for the next poll
-        if stopped.wait(polling_interval):
-            break
+
+        # Wait for the next poll without holding a thread pool slot. If the daemon
+        # is stopped while waiting, stopped.wait() resolves and the while-guard exits.
+        try:
+            await asyncio.wait_for(stopped.wait(), timeout=polling_interval)
+        except asyncio.TimeoutError:
+            pass
 
 def _phase_sync_secrets(spec, name, namespace, logger, uid, **kwargs):
     try:

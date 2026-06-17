@@ -19,3 +19,34 @@ spec:
       - name: phase-kubernetes-operator
         image: phasehq/kubernetes-operator:latest
         imagePullPolicy: IfNotPresent
+        args:
+          - --metrics-bind-address=:8080
+          - --health-probe-bind-address=:8081
+        ports:
+          - name: metrics
+            containerPort: 8080
+            protocol: TCP
+          - name: health
+            containerPort: 8081
+            protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+        env:
+          - name: PHASE_VERIFY_SSL
+            value: "True"
+          - name: PHASE_DEBUG
+            value: "False"
+          - name: PHASE_OPERATOR_HTTP_RETRIES
+            value: "5"
+          - name: PHASE_OPERATOR_HTTP_BACKOFF
+            value: "1"
+          - name: PHASE_OPERATOR_SOURCE_CACHE_TTL
+            value: "10"
+          - name: PHASE_OPERATOR_MAX_CONCURRENT_RECONCILES
+            value: "4"

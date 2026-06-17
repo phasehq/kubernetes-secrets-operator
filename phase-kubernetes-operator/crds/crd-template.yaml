@@ -32,6 +32,9 @@ spec:
                 phaseApp:
                   description: The Phase application to fetch secrets from.
                   type: string
+                phaseAppId:
+                  description: The Phase application ID to fetch secrets from. Takes precedence over phaseApp when set.
+                  type: string
                 phaseAppEnv:
                   description: The environment variable representing the app environment in Phase.
                   type: string
@@ -55,7 +58,6 @@ spec:
                           type: object
                           required:
                             - secretName
-                            - secretNamespace
                           properties:
                             secretName:
                               description: The name of the Kubernetes Secret.
@@ -74,8 +76,6 @@ spec:
                     type: object
                     required:
                       - secretName
-                      - secretNamespace
-                      - secretType
                     properties:
                       secretName:
                         description: The name of the Kubernetes Secret.
@@ -100,6 +100,7 @@ spec:
                         description: Default name transformer applied to all secret keys. Per-key nameTransformer in processors takes precedence.
                         type: string
                         enum:
+                          - "upper_snake"
                           - "camel"
                           - "upper-camel"
                           - "lower-snake"
@@ -118,6 +119,7 @@ spec:
                               description: The format for transforming the secret key name.
                               type: string
                               enum:
+                                - "upper_snake"
                                 - "camel"
                                 - "upper-camel"
                                 - "lower-snake"
@@ -130,15 +132,31 @@ spec:
                                 - "plain"
                                 - "base64"
                               default: "plain"
+                      template:
+                        description: Template metadata to apply to the managed Kubernetes Secret.
+                        type: object
+                        properties:
+                          metadata:
+                            type: object
+                            properties:
+                              labels:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                              annotations:
+                                type: object
+                                additionalProperties:
+                                  type: string
                 pollingInterval:
                   description: Interval at which to poll for secret updates.
                   type: integer
                   default: 60
                   minimum: 5
+                redeployLabelSelector:
+                  description: Optional label selector used to narrow Deployment scans for auto-redeploy.
+                  type: string
               required:
-                - phaseApp
                 - managedSecretReferences
-                - phaseHost
             status:
               description: PhaseSecretStatus defines the observed state of PhaseSecret
               type: object
@@ -183,8 +201,6 @@ spec:
                         description: Type of condition in CamelCase.
                         type: string
                         maxLength: 316
-              required:
-                - conditions
       served: true
       storage: true
       subresources:

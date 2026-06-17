@@ -22,6 +22,9 @@
 - Automatically redeploy deployments when a secret is updated
 - Sync secrets based on environment (dev, staging, prod), folders and tags
 - Transform secrets via secret processors
+- Target Phase apps by exact app ID with `phaseAppId`
+- Add labels and annotations to managed Kubernetes Secrets
+- Update managed Secrets atomically without a delete/recreate gap
 
 ```yaml
 metadata:
@@ -42,7 +45,7 @@ helm repo add phase https://helm.phase.dev && helm repo update
 Install the Phase Secrets Operator:
 
 ```fish
-helm install phase-secrets-operator phase/phase-kubernetes-operator --set image.tag=v1.0.1
+helm install phase-secrets-operator phase/phase-kubernetes-operator --set image.tag=v2.0.0
 ```
 
     It's best practice to specify the version in production environments to avoid
@@ -85,8 +88,13 @@ metadata:
   namespace: default
 spec:
   phaseApp: "the-name-of-your-phase-app" # The name of your Phase application
+  # phaseAppId: "your-phase-app-id" # OPTIONAL - use an exact app ID instead of name matching
   phaseAppEnv: "prod" # OPTIONAL - The Phase application environment to fetch secrets from
+  phaseAppEnvPath: "/" # OPTIONAL - Folder path to fetch from
+  phaseAppEnvTag: "backend" # OPTIONAL - Tag filter
   phaseHost: "https://console.phase.dev" # OPTIONAL - URL of the Phase Console instance
+  pollingInterval: 60 # OPTIONAL - Minimum 5 seconds
+  redeployLabelSelector: "app=my-application" # OPTIONAL - narrow Deployment scans for auto-redeploy
   authentication:
     serviceToken:
       serviceTokenSecretReference:
@@ -95,6 +103,14 @@ spec:
   managedSecretReferences:
     - secretName: "my-application-secret" # Name of the Kubernetes managed secret that Phase will sync
       secretNamespace: "default"
+      secretType: Opaque
+      # nameTransformer: lower-snake
+      # template:
+      #   metadata:
+      #     labels:
+      #       argocd.argoproj.io/secret-type: cluster
+      #     annotations:
+      #       example.com/owner: platform
 ```
 
 Deploy the custom resource:
@@ -119,12 +135,103 @@ kubectl get secret my-application-secret -o yaml
 
 [Phase Kubernetes Operator - Docs](https://docs.phase.dev/integrations/platforms/kubernetes)
 
+
+## Configuration Notes
+
+### Exact App Selection
+
+Use `phaseAppId` when you want to avoid partial-name matching:
+
+```yaml
+spec:
+  phaseAppId: "b6ad8824-7133-4839-8013-f87c2182fc61"
+```
+
+If both `phaseApp` and `phaseAppId` are set, `phaseAppId` takes precedence.
+
+### Managed Secret Metadata
+
+You can pass labels and annotations through to each managed Kubernetes Secret:
+
+```yaml
+spec:
+  managedSecretReferences:
+    - secretName: "argocd-cluster"
+      secretNamespace: "argocd"
+      secretType: Opaque
+      template:
+        metadata:
+          labels:
+            argocd.argoproj.io/secret-type: cluster
+          annotations:
+            example.com/owner: platform
+```
+
+For `kubernetes.io/service-account-token` Secrets, Kubernetes requires the service account annotation:
+
+```yaml
+spec:
+  managedSecretReferences:
+    - secretName: "phase-managed-sa-token"
+      secretNamespace: "default"
+      secretType: kubernetes.io/service-account-token
+      template:
+        metadata:
+          annotations:
+            kubernetes.io/service-account.name: "my-service-account"
+```
+
+### Auto-Redeploy
+
+Deployments opt in by setting the annotation below on the Deployment metadata:
+
+```yaml
+metadata:
+  annotations:
+    secrets.phase.dev/redeploy: "true"
+```
+
+When a managed Secret changes, the operator patches matching Deployments with
+`phase.autoredeploy.timestamp` on the pod template. Matching is based on
+`containers[].envFrom[].secretRef.name`, preserving the legacy behavior.
+
+Use `spec.redeployLabelSelector` to reduce Deployment list work in namespaces with many Deployments.
+
+### Helm Values
+
+The chart exposes operator runtime knobs through `operator.env`:
+
+```yaml
+operator:
+  env:
+    PHASE_VERIFY_SSL: "True"
+    PHASE_DEBUG: "False"
+    PHASE_OPERATOR_HTTP_RETRIES: "5"
+    PHASE_OPERATOR_HTTP_BACKOFF: "1"
+    PHASE_OPERATOR_SOURCE_CACHE_TTL: "10"
+    PHASE_OPERATOR_MAX_CONCURRENT_RECONCILES: "4"
+```
+
+`PHASE_OPERATOR_SOURCE_CACHE_TTL` is a short-lived in-process cache used to coalesce concurrent metadata and secret reads from many `PhaseSecret` CRs. It does not replace the per-CR sync checkpoint.
+
+### CRD Upgrades
+
+Helm installs CRDs from the chart `crds/` directory, but Helm does not upgrade those CRDs automatically on chart upgrade. Before using new CR fields such as `phaseAppId`, `template.metadata`, or `redeployLabelSelector`, apply the updated CRD:
+
+```fish
+kubectl apply -f crd-template.yaml
+```
+
+### Secret Update Behavior
+
+The Go operator updates Kubernetes Secrets atomically by default. It builds the full desired Secret state and updates the existing object in place, avoiding the transient missing-Secret window caused by the legacy delete/recreate behavior. Delete/recreate is only used as a fallback when Kubernetes rejects an in-place update.
+
 ## Development:
 
-1. Install python dependencies
+1. Run the Go test suite
 
 ```
-pip3 install -r requirements.txt
+go test ./...
 ```
 
 2. Create a local kind cluster (skip if you have one already setup)
@@ -176,8 +283,26 @@ kubectl apply -f dev-crd.yaml
 kubectl apply -f dev-cr.yaml
 ```
 
-7. Start the operator via Kopf
+7. Start the operator locally
 
 ```fish
-kopf run src/main.py
+go run ./cmd/manager
+```
+
+8. Build the operator container
+
+```fish
+docker build -t phase-kubernetes-operator-go:test .
+```
+
+9. Install the local chart into minikube
+
+```fish
+minikube image load phase-kubernetes-operator-go:test
+helm upgrade --install phase-secrets-operator ./phase-kubernetes-operator \
+  --namespace phase-operator \
+  --create-namespace \
+  --set image.repository=phase-kubernetes-operator-go \
+  --set image.tag=test \
+  --set image.pullPolicy=Never
 ```

@@ -10,7 +10,8 @@ image:
 # Security context for the operator pod
 securityContext:
   runAsNonRoot: true
-  runAsUser: 1000
+  runAsUser: 65532
+  runAsGroup: 65532
 
 # Service account configuration
 serviceAccount:

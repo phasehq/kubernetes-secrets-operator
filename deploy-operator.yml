@@ -14,7 +14,8 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
+        runAsUser: 65532
+        runAsGroup: 65532
       containers:
       - name: phase-kubernetes-operator
         image: phasehq/kubernetes-operator:latest

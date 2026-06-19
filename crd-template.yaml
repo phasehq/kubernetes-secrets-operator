@@ -28,13 +28,20 @@ spec:
             spec:
               type: object
               description: PhaseSecretSpec defines the desired state of PhaseSecret
+              anyOf:
+                - required:
+                    - phaseApp
+                - required:
+                    - phaseAppId
               properties:
                 phaseApp:
                   description: The Phase application to fetch secrets from.
                   type: string
+                  minLength: 1
                 phaseAppId:
                   description: The Phase application ID to fetch secrets from. Takes precedence over phaseApp when set.
                   type: string
+                  minLength: 1
                 phaseAppEnv:
                   description: The environment variable representing the app environment in Phase.
                   type: string

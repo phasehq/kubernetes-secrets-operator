@@ -14,8 +14,6 @@ on:
       - '.github/workflows/build_release.yml'
   push:
     branches: [ main ]
-    tags:
-      - 'v*'
     paths:
       - 'api/**'
       - 'cmd/**'
@@ -25,6 +23,8 @@ on:
       - 'Dockerfile'
       - 'phase-kubernetes-operator/**'
       - '.github/workflows/build_release.yml'
+  release:
+    types: [published]
 
 jobs:
   test:
@@ -66,6 +66,9 @@ jobs:
   build-and-push:
     needs: [test, helm-test]
     runs-on: ubuntu-latest
+    env:
+      STAGING_IMAGE: phasehq/kubernetes-operator-staging
+      PRODUCTION_IMAGE: phasehq/kubernetes-operator
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,22 +86,24 @@ jobs:
 
       - name: Extract tag name
         id: extract_tag
+        if: github.event_name == 'release'
         shell: bash
-        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+        run: echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push (PR)
+      - name: Build and push staging image (PR)
         if: github.event_name == 'pull_request'
         run: |
           SHORT_SHA=${{ github.event.pull_request.head.sha }}
           echo "Short SHA: $SHORT_SHA"
-          docker buildx build --platform linux/amd64,linux/arm64 -t phasehq/kubernetes-operator:${SHORT_SHA:0:7} . --push
+          docker buildx build --platform linux/amd64,linux/arm64 -t ${STAGING_IMAGE}:${SHORT_SHA:0:7} . --push
 
-      - name: Build and push (Main branch)
+      - name: Build and push staging image (Main branch)
         if: github.ref == 'refs/heads/main'
         run: |
-          docker buildx build --platform linux/amd64,linux/arm64 -t phasehq/kubernetes-operator:main . --push
+          SHORT_SHA=${GITHUB_SHA::7}
+          docker buildx build --platform linux/amd64,linux/arm64 -t ${STAGING_IMAGE}:${SHORT_SHA} . --push
 
-      - name: Build and push (Release tag)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Build and push production image (Release tag)
+        if: github.event_name == 'release'
         run: |
-          docker buildx build --platform linux/amd64,linux/arm64 -t phasehq/kubernetes-operator:${{ steps.extract_tag.outputs.tag }} -t phasehq/kubernetes-operator:latest . --push
+          docker buildx build --platform linux/amd64,linux/arm64 -t ${PRODUCTION_IMAGE}:${{ steps.extract_tag.outputs.tag }} -t ${PRODUCTION_IMAGE}:latest . --push

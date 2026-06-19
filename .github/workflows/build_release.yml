@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Operator CI
 
 on:
   pull_request:
@@ -10,6 +10,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Dockerfile'
+      - 'phase-kubernetes-operator/**'
       - '.github/workflows/build_release.yml'
   push:
     branches: [ main ]
@@ -22,10 +23,48 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Dockerfile'
+      - 'phase-kubernetes-operator/**'
       - '.github/workflows/build_release.yml'
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify module dependencies
+        run: go mod verify
+
+      - name: Build operator binary
+        run: go build -trimpath -ldflags="-s -w" -o /dev/null ./cmd/manager
+
+      - name: Run tests
+        run: go test -race -count=1 ./...
+
+  helm-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint operator chart
+        run: helm lint phase-kubernetes-operator/
+
+      - name: Render operator chart
+        run: helm template phase-kubernetes-operator phase-kubernetes-operator/ > /dev/null
+
   build-and-push:
+    needs: [test, helm-test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

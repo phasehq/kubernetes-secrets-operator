@@ -208,36 +208,23 @@ func (r *PhaseSecretReconciler) upsertSecret(ctx context.Context, name, namespac
 		return false, err
 	}
 
+	updatedLabels := mergeMetadata(existing.Labels, desiredLabels)
+	updatedAnnotations := mergeMetadata(existing.Annotations, desiredAnnotations)
 	if existing.Type == secretType &&
 		reflect.DeepEqual(existing.Data, data) &&
-		reflect.DeepEqual(existing.Labels, desiredLabels) &&
-		reflect.DeepEqual(existing.Annotations, desiredAnnotations) {
+		reflect.DeepEqual(existing.Labels, updatedLabels) &&
+		reflect.DeepEqual(existing.Annotations, updatedAnnotations) {
 		return false, nil
 	}
 
 	updated := existing.DeepCopy()
 	updated.Type = secretType
 	updated.Data = data
-	updated.Labels = desiredLabels
-	updated.Annotations = desiredAnnotations
+	updated.Labels = updatedLabels
+	updated.Annotations = updatedAnnotations
 
 	if err := r.Update(ctx, updated); err != nil {
-		fallback := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        name,
-				Namespace:   namespace,
-				Labels:      desiredLabels,
-				Annotations: desiredAnnotations,
-			},
-			Type: secretType,
-			Data: data,
-		}
-		if deleteErr := r.Delete(ctx, &existing); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
-			return false, fmt.Errorf("atomic secret update failed: %w; delete fallback failed: %v", err, deleteErr)
-		}
-		if createErr := r.Create(ctx, fallback); createErr != nil {
-			return false, fmt.Errorf("atomic secret update failed: %w; create fallback failed: %v", err, createErr)
-		}
+		return false, fmt.Errorf("atomic secret update failed: %w", err)
 	}
 
 	return true, nil
@@ -333,6 +320,20 @@ func cloneMap(input map[string]string) map[string]string {
 		output[key] = value
 	}
 	return output
+}
+
+func mergeMetadata(existing, desired map[string]string) map[string]string {
+	merged := cloneMap(existing)
+	if len(desired) == 0 {
+		return merged
+	}
+	if merged == nil {
+		merged = map[string]string{}
+	}
+	for key, value := range desired {
+		merged[key] = value
+	}
+	return merged
 }
 
 type resolvedSpec struct {

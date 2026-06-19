@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -136,6 +137,89 @@ func TestSpecChangeForcesSyncAndMetadataOnlyUpdate(t *testing.T) {
 	}
 }
 
+func TestUpsertSecretPreservesExistingMetadataAndMergesTemplate(t *testing.T) {
+	ctx := context.Background()
+	scheme := testScheme(t)
+	existing := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "managed",
+			Namespace:   "secrets-a",
+			Labels:      map[string]string{"existing": "keep"},
+			Annotations: map[string]string{"existing": "keep"},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{"API_KEY": []byte("old")},
+	}
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
+	reconciler := testReconciler(k8sClient, scheme, &fakePhaseClient{}, t.TempDir())
+
+	changed, err := reconciler.upsertSecret(
+		ctx,
+		"managed",
+		"secrets-a",
+		corev1.SecretTypeOpaque,
+		map[string][]byte{"API_KEY": []byte("new")},
+		&phasev1.SecretTemplate{
+			Metadata: &phasev1.SecretTemplateMetadata{
+				Labels:      map[string]string{"managed": "true"},
+				Annotations: map[string]string{"owner": "platform"},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("upsertSecret() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("upsertSecret() changed = false, want true")
+	}
+
+	var secret corev1.Secret
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: "managed", Namespace: "secrets-a"}, &secret); err != nil {
+		t.Fatalf("managed secret get error = %v", err)
+	}
+	if secret.Labels["existing"] != "keep" || secret.Labels["managed"] != "true" {
+		t.Fatalf("labels were not preserved and merged: %#v", secret.Labels)
+	}
+	if secret.Annotations["existing"] != "keep" || secret.Annotations["owner"] != "platform" {
+		t.Fatalf("annotations were not preserved and merged: %#v", secret.Annotations)
+	}
+	if string(secret.Data["API_KEY"]) != "new" {
+		t.Fatalf("secret data = %q, want new", string(secret.Data["API_KEY"]))
+	}
+}
+
+func TestUpsertSecretUpdateFailureDoesNotDeleteExistingSecret(t *testing.T) {
+	ctx := context.Background()
+	scheme := testScheme(t)
+	existing := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "managed", Namespace: "secrets-a"},
+		Type:       corev1.SecretTypeOpaque,
+		Data:       map[string][]byte{"API_KEY": []byte("old")},
+	}
+	baseClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
+	wrappedClient := &failingUpdateClient{Client: baseClient}
+	reconciler := testReconciler(wrappedClient, scheme, &fakePhaseClient{}, t.TempDir())
+
+	changed, err := reconciler.upsertSecret(ctx, "managed", "secrets-a", corev1.SecretTypeOpaque, map[string][]byte{"API_KEY": []byte("new")}, nil)
+	if err == nil {
+		t.Fatal("upsertSecret() error = nil, want update error")
+	}
+	if changed {
+		t.Fatal("upsertSecret() changed = true, want false")
+	}
+	if wrappedClient.deleteCalled {
+		t.Fatal("upsertSecret() deleted existing secret after update failure")
+	}
+
+	var secret corev1.Secret
+	if err := baseClient.Get(ctx, types.NamespacedName{Name: "managed", Namespace: "secrets-a"}, &secret); err != nil {
+		t.Fatalf("existing secret was removed: %v", err)
+	}
+	if string(secret.Data["API_KEY"]) != "old" {
+		t.Fatalf("existing secret data = %q, want old", string(secret.Data["API_KEY"]))
+	}
+}
+
 func TestRedeployLabelSelectorNarrowsDeploymentScan(t *testing.T) {
 	ctx := context.Background()
 	scheme := testScheme(t)
@@ -185,6 +269,20 @@ func testScheme(t *testing.T) *runtime.Scheme {
 		t.Fatalf("phase scheme error = %v", err)
 	}
 	return scheme
+}
+
+type failingUpdateClient struct {
+	client.Client
+	deleteCalled bool
+}
+
+func (c *failingUpdateClient) Update(context.Context, client.Object, ...client.UpdateOption) error {
+	return errors.New("update failed")
+}
+
+func (c *failingUpdateClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+	c.deleteCalled = true
+	return c.Client.Delete(ctx, obj, opts...)
 }
 
 func testReconciler(k8sClient client.Client, scheme *runtime.Scheme, phase *fakePhaseClient, dir string) *PhaseSecretReconciler {

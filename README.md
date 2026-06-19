@@ -211,17 +211,41 @@ operator:
     PHASE_OPERATOR_MAX_CONCURRENT_RECONCILES: "4"
 ```
 
-### CRD Upgrades
+### Upgrading from v1 to v2
 
-Helm installs CRDs from the chart `crds/` directory, but Helm does not upgrade those CRDs automatically on chart upgrade. Before using new CR fields such as `phaseAppId`, `template.metadata`, or `redeployLabelSelector`, apply the updated CRD:
+Helm does not upgrade CRDs automatically. Apply the v2 CRD from the chart `crds/` directory before upgrading:
 
 ```fish
-kubectl apply -f crd-template.yaml
+kubectl apply -f https://raw.githubusercontent.com/phasehq/kubernetes-secrets-operator/v2.0.0/phase-kubernetes-operator/crds/crd-template.yaml
 ```
 
-### Secret Update Behavior
+Upgrade the release:
 
-The Go operator updates Kubernetes Secrets atomically by default. It builds the full desired Secret state and updates the existing object in place, avoiding the transient missing-Secret window caused by the legacy delete/recreate behavior. Delete/recreate is only used as a fallback when Kubernetes rejects an in-place update.
+```fish
+helm repo update phase
+helm upgrade phase-secrets-operator phase/phase-kubernetes-operator --set image.tag=v2.0.0
+```
+
+Existing managed Secrets are preserved and the Go operator performs one full resync on startup. Existing v1 `PhaseSecret` resources may still have the legacy Kopf finalizer; remove it once after upgrading so future deletes do not hang:
+
+```fish
+kubectl get phasesecrets.secrets.phase.dev -A \
+  -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name --no-headers |
+while read ns name; do
+  kubectl patch phasesecret "$name" -n "$ns" --type=json \
+    -p '[{"op":"remove","path":"/metadata/finalizers"}]'
+done
+```
+
+### Design decisions
+
+- Managed Secrets are updated in place. If Kubernetes rejects an update, the existing Secret is left untouched and the operator retries later; Secret availability is preferred over forced delete/recreate.
+- Changing immutable Secret fields such as `type` may require manually deleting and recreating the Secret.
+- `template.metadata` labels/annotations are merged into existing Secret metadata. Removing a key from the CR does not remove it from an existing Secret.
+- `type: base64` expects a base64 value in Phase and preserves the workload-facing Kubernetes Secret payload.
+- Unresolved `${...}` references are synced as-is by design.
+- Auto-redeploy requires `secrets.phase.dev/redeploy`, an `envFrom.secretRef` match, and a changed managed Secret.
+- Service token and managed Secret namespaces are explicit; auto-redeploy scans Deployments in the `PhaseSecret` namespace.
 
 ## Development:
 

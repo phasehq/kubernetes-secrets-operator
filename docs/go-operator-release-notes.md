@@ -6,12 +6,11 @@ This release rewrites the Phase Kubernetes Secrets Operator from Python/Kopf to 
 
 - Replaced the Kopf daemon loop with a controller-runtime reconciler.
 - Preserved the local sync checkpoint behavior so full secret reads are skipped when the Phase environment metadata and CR spec are unchanged.
-- Added short-lived source request coalescing to avoid thundering-herd Phase API reads when many CRs reconcile together.
 - Updated managed Kubernetes Secrets atomically instead of delete/recreate by default.
 - Added exact app targeting with `spec.phaseAppId`.
 - Added per-managed-secret metadata passthrough with `managedSecretReferences[].template.metadata.labels` and `.annotations`.
 - Added `spec.redeployLabelSelector` to narrow auto-redeploy Deployment scans.
-- Added Helm knobs for retries, backoff, source cache TTL, and reconcile concurrency.
+- Added Helm knobs for retries, backoff, and reconcile concurrency.
 
 ## Compatibility
 

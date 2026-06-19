@@ -208,11 +208,8 @@ operator:
     PHASE_DEBUG: "False"
     PHASE_OPERATOR_HTTP_RETRIES: "5"
     PHASE_OPERATOR_HTTP_BACKOFF: "1"
-    PHASE_OPERATOR_SOURCE_CACHE_TTL: "10"
     PHASE_OPERATOR_MAX_CONCURRENT_RECONCILES: "4"
 ```
-
-`PHASE_OPERATOR_SOURCE_CACHE_TTL` is a short-lived in-process cache used to coalesce concurrent metadata and secret reads from many `PhaseSecret` CRs. It does not replace the per-CR sync checkpoint.
 
 ### CRD Upgrades
 

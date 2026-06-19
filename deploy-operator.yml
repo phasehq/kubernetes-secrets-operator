@@ -47,7 +47,5 @@ spec:
             value: "5"
           - name: PHASE_OPERATOR_HTTP_BACKOFF
             value: "1"
-          - name: PHASE_OPERATOR_SOURCE_CACHE_TTL
-            value: "10"
           - name: PHASE_OPERATOR_MAX_CONCURRENT_RECONCILES
             value: "4"

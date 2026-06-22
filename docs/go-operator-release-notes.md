@@ -11,6 +11,8 @@ This release rewrites the Phase Kubernetes Secrets Operator from Python/Kopf to 
 - Added per-managed-secret metadata passthrough with `managedSecretReferences[].template.metadata.labels` and `.annotations`.
 - Added `spec.redeployLabelSelector` to narrow auto-redeploy Deployment scans.
 - Added Helm knobs for retries, backoff, and reconcile concurrency.
+- Added `spec.onSecretReferenceError` (`Fail` default, `Warn`) to control whether an unresolved `${...}` reference aborts the sync or is synced as-is; both modes record a Warning event on the `PhaseSecret`.
+- Reconcile each managed secret reference independently so one failing reference no longer blocks the others in the same `PhaseSecret`.
 
 ## Compatibility
 
@@ -39,6 +41,14 @@ Helm does not upgrade CRDs in `crds/` automatically. Apply the updated CRD befor
 ```sh
 kubectl apply -f crd-template.yaml
 ```
+
+## Upgrading from v1
+
+The v1 (Kopf) operator added a `kopf.zalando.org/KopfFinalizerMarker` finalizer to every `PhaseSecret`. The Go operator does not use it, so after upgrading you must remove it once from existing resources — otherwise deleting a `PhaseSecret` later will hang in `Terminating`. See the [Kubernetes integration upgrade guide](https://docs.phase.dev/integrations/platforms/kubernetes) for the full step-by-step procedure (apply the CRD, `helm upgrade`, remove the finalizer).
+
+## Reference Resolution
+
+By default the operator fails a sync when a `${...}` reference cannot be resolved, so a broken value is never written to a workload; it records a Warning event naming the affected secret. Set `onSecretReferenceError: Warn` on a `PhaseSecret` to instead sync with unresolved references left as their literal `${...}` text. This is a behavior change from v1, which always synced unresolved references as-is.
 
 ## Service Account Token Secrets
 

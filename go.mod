@@ -3,7 +3,7 @@ module github.com/phasehq/kubernetes-secrets-operator
 go 1.26.4
 
 require (
-	github.com/phasehq/golang-sdk/v2 v2.3.0
+	github.com/phasehq/golang-sdk/v2 v2.4.0
 	k8s.io/api v0.36.2
 	k8s.io/apimachinery v0.36.2
 	k8s.io/client-go v0.36.2

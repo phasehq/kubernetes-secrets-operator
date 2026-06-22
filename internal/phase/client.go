@@ -3,6 +3,7 @@ package phase
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -114,11 +115,12 @@ func (c *Client) GetSecrets(ctx context.Context, token, host, appName, appID, en
 		}
 
 		secrets, err := p.Get(phasesdk.GetOptions{
-			AppName: appName,
-			AppID:   appID,
-			EnvName: envName,
-			Path:    path,
-			Tag:     tag,
+			AppName:                        appName,
+			AppID:                          appID,
+			EnvName:                        envName,
+			Path:                           path,
+			Tag:                            tag,
+			FailOnReferenceResolutionError: true,
 		})
 		if err != nil {
 			return err
@@ -148,6 +150,9 @@ func (c *Client) withRetry(ctx context.Context, fn func() error) error {
 			lastErr = err
 			if attempt < attempts-1 {
 				sleep := c.backoff * time.Duration(attempt+1)
+				if delay := retryAfterDelay(err); delay > 0 {
+					sleep = delay
+				}
 				log.Printf("phase API call failed, retrying in %s: %v", sleep, err)
 				timer := time.NewTimer(sleep)
 				select {
@@ -162,6 +167,18 @@ func (c *Client) withRetry(ctx context.Context, fn func() error) error {
 		return nil
 	}
 	return lastErr
+}
+
+func retryAfterDelay(err error) time.Duration {
+	var rateErr *network.RateLimitError
+	if errors.As(err, &rateErr) && rateErr.RetryAfter > 0 {
+		return rateErr.RetryAfter
+	}
+	var apiErr *network.APIError
+	if errors.As(err, &apiErr) && apiErr.RetryAfter > 0 {
+		return apiErr.RetryAfter
+	}
+	return 0
 }
 
 func boolEnv(name string, fallback bool) bool {

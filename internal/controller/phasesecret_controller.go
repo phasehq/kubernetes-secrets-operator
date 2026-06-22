@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"regexp"
+	"sort"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -17,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	crcontroller "sigs.k8s.io/controller-runtime/pkg/controller"
@@ -29,22 +33,23 @@ import (
 )
 
 const (
-	defaultPhaseHost          = "https://console.phase.dev"
-	defaultPhaseAppEnv        = "production"
-	defaultPhaseAppEnvPath    = "/"
-	defaultPollingInterval    = 60 * time.Second
-	minPollingInterval        = 5 * time.Second
-	defaultServiceTokenName   = "phase-service-token"
-	defaultSecretType         = corev1.SecretTypeOpaque
-	defaultNameTransformer    = "upper_snake"
-	redeployAnnotation        = "secrets.phase.dev/redeploy"
-	redeployTimestamp         = "phase.autoredeploy.timestamp"
-	serviceTokenSecretDataKey = "token"
+	defaultPhaseHost           = "https://console.phase.dev"
+	defaultPhaseAppEnv         = "production"
+	defaultPhaseAppEnvPath     = "/"
+	defaultPollingInterval     = 60 * time.Second
+	minPollingInterval         = 5 * time.Second
+	defaultServiceTokenName    = "phase-service-token"
+	defaultSecretType          = corev1.SecretTypeOpaque
+	defaultNameTransformer     = "upper_snake"
+	redeployAnnotation         = "secrets.phase.dev/redeploy"
+	redeployTimestamp          = "phase.autoredeploy.timestamp"
+	serviceTokenSecretDataKey  = "token"
+	onSecretReferenceErrorWarn = "Warn"
 )
 
 type PhaseClient interface {
 	EnvironmentUpdatedAt(ctx context.Context, token, host, appName, appID, envName string) (time.Time, error)
-	GetSecrets(ctx context.Context, token, host, appName, appID, envName, path, tag string) (map[string]string, error)
+	GetSecrets(ctx context.Context, token, host, appName, appID, envName, path, tag string, failOnReferenceError bool) (map[string]string, error)
 }
 
 type PhaseSecretReconciler struct {
@@ -52,6 +57,7 @@ type PhaseSecretReconciler struct {
 	Scheme                  *runtime.Scheme
 	Phase                   PhaseClient
 	Cache                   *syncstate.Cache
+	Recorder                record.EventRecorder
 	JitterRatio             float64
 	MaxConcurrentReconciles int
 }
@@ -106,20 +112,35 @@ func (r *PhaseSecretReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return result, nil
 	}
 
-	phaseSecrets, err := r.Phase.GetSecrets(ctx, token, effective.phaseHost, effective.phaseApp, effective.phaseAppID, effective.phaseAppEnv, effective.phaseAppEnvPath, effective.phaseAppEnvTag)
+	failOnReferenceError := !strings.EqualFold(ps.Spec.OnSecretReferenceError, onSecretReferenceErrorWarn)
+	phaseSecrets, err := r.Phase.GetSecrets(ctx, token, effective.phaseHost, effective.phaseApp, effective.phaseAppID, effective.phaseAppEnv, effective.phaseAppEnvPath, effective.phaseAppEnvTag, failOnReferenceError)
 	if err != nil {
 		logger.Error(err, "failed to fetch Phase secrets")
+		reason := "FetchFailed"
+		if isReferenceResolutionError(err) {
+			reason = "ReferenceResolutionFailed"
+		}
+		r.emitWarning(&ps, reason, err.Error())
 		return result, nil
 	}
+	// In Warn mode the fetch succeeds even when references cannot be resolved,
+	// leaving them as literal ${...} text. Surface that so the bypass is never silent.
+	if !failOnReferenceError {
+		if keys := unresolvedReferenceKeys(phaseSecrets); len(keys) > 0 {
+			r.emitWarning(&ps, "UnresolvedReferences",
+				fmt.Sprintf("%d Phase secret(s) contain references that could not be resolved and were synced as-is: %s", len(keys), strings.Join(keys, ", ")))
+		}
+	}
 
-	secretChanged := false
-	affectedSecretNames := make([]string, 0, len(ps.Spec.ManagedSecretReferences))
+	changedSecretNames := make([]string, 0, len(ps.Spec.ManagedSecretReferences))
+	var refErrs []error
 	for _, ref := range ps.Spec.ManagedSecretReferences {
 		secretName := ref.SecretName
 		if secretName == "" {
-			return result, fmt.Errorf("managedSecretReferences entry has empty secretName")
+			refErrs = append(refErrs, fmt.Errorf("managedSecretReferences entry has empty secretName"))
+			r.emitWarning(&ps, "InvalidManagedSecretReference", "a managedSecretReferences entry has an empty secretName")
+			continue
 		}
-		affectedSecretNames = append(affectedSecretNames, secretName)
 
 		secretNamespace := ref.SecretNamespace
 		if secretNamespace == "" {
@@ -134,30 +155,78 @@ func (r *PhaseSecretReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			nameTransformer = defaultNameTransformer
 		}
 
+		// A failure on one managed reference must not block the others. Collect the
+		// error and continue; the checkpoint is held back below until every reference
+		// has synced, so failed references are retried on the next poll.
 		processed, err := transform.ProcessSecrets(phaseSecrets, ref.Processors, nameTransformer)
 		if err != nil {
-			return result, err
+			logger.Error(err, "failed to process managed secret", "secret", types.NamespacedName{Name: secretName, Namespace: secretNamespace})
+			r.emitWarning(&ps, "SecretProcessingFailed", fmt.Sprintf("%s/%s: %v", secretNamespace, secretName, err))
+			refErrs = append(refErrs, err)
+			continue
 		}
 		changed, err := r.upsertSecret(ctx, secretName, secretNamespace, secretType, processed, ref.Template)
 		if err != nil {
 			logger.Error(err, "failed to reconcile managed secret", "secret", types.NamespacedName{Name: secretName, Namespace: secretNamespace})
-			return result, nil
+			r.emitWarning(&ps, "SecretSyncFailed", fmt.Sprintf("%s/%s: %v", secretNamespace, secretName, err))
+			refErrs = append(refErrs, err)
+			continue
 		}
-		secretChanged = secretChanged || changed
+		if changed {
+			changedSecretNames = append(changedSecretNames, secretName)
+		}
 	}
 
-	if secretChanged {
-		if err := r.redeployAffectedDeployments(ctx, ps.Namespace, affectedSecretNames, ps.Spec.RedeployLabelSelector); err != nil {
+	// Only redeploy Deployments wired to secrets that actually changed this sync.
+	if len(changedSecretNames) > 0 {
+		if err := r.redeployAffectedDeployments(ctx, ps.Namespace, changedSecretNames, ps.Spec.RedeployLabelSelector); err != nil {
 			logger.Error(err, "failed to patch one or more affected deployments")
 		}
+	}
+
+	// Hold the sync checkpoint until every managed reference has synced, so the next
+	// poll retries the failures instead of treating the environment as fully synced.
+	if len(refErrs) > 0 {
+		logger.Info("PhaseSecret sync completed with errors; checkpoint not advanced",
+			"managedSecretCount", len(ps.Spec.ManagedSecretReferences), "failed", len(refErrs), "changed", len(changedSecretNames))
+		return result, nil
 	}
 
 	if err := r.Cache.Update(ps.Namespace, ps.Name, string(ps.UID), updatedAt, specHash); err != nil {
 		return result, err
 	}
 
-	logger.Info("PhaseSecret sync complete", "managedSecretCount", len(ps.Spec.ManagedSecretReferences), "secretChanged", secretChanged, "nextSyncAfter", requeueAfter.String())
+	logger.Info("PhaseSecret sync complete", "managedSecretCount", len(ps.Spec.ManagedSecretReferences), "changed", len(changedSecretNames), "nextSyncAfter", requeueAfter.String())
 	return result, nil
+}
+
+func (r *PhaseSecretReconciler) emitWarning(ps *phasev1.PhaseSecret, reason, message string) {
+	if r.Recorder != nil {
+		r.Recorder.Event(ps, corev1.EventTypeWarning, reason, message)
+	}
+}
+
+var referencePattern = regexp.MustCompile(`\$\{[^}]+\}`)
+
+func isReferenceResolutionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "resolve references") ||
+		strings.Contains(msg, "could not be resolved") ||
+		strings.Contains(msg, "referenced secrets")
+}
+
+func unresolvedReferenceKeys(secrets map[string]string) []string {
+	keys := make([]string, 0)
+	for key, value := range secrets {
+		if referencePattern.MatchString(value) {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func (r *PhaseSecretReconciler) serviceToken(ctx context.Context, ps *phasev1.PhaseSecret) (string, error) {

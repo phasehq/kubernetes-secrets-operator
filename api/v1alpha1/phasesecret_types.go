@@ -11,6 +11,7 @@ type PhaseSecretSpec struct {
 	PhaseAppEnv             string                   `json:"phaseAppEnv,omitempty"`
 	PhaseAppEnvPath         string                   `json:"phaseAppEnvPath,omitempty"`
 	PhaseAppEnvTag          string                   `json:"phaseAppEnvTag,omitempty"`
+	OnSecretReferenceError  string                   `json:"onSecretReferenceError,omitempty"`
 	Authentication          *Authentication          `json:"authentication,omitempty"`
 	PhaseHost               string                   `json:"phaseHost,omitempty"`
 	ManagedSecretReferences []ManagedSecretReference `json:"managedSecretReferences,omitempty"`

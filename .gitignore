@@ -18,7 +18,6 @@ coverage.html
 release.md
 
 # Helm/chart packaging
-*.tgz
 charts/
 Chart.lock
 

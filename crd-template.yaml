@@ -53,6 +53,17 @@ spec:
                 phaseAppEnvTag:
                   description: Tag for filtering secrets in the specified Phase app environment.
                   type: string
+                onSecretReferenceError:
+                  description: >-
+                    Policy when a Phase secret reference cannot be resolved. "Fail" (default)
+                    aborts the sync so unresolved values are never written to the managed
+                    Secret. "Warn" syncs anyway — leaving references as their literal ${...}
+                    text — and records a Warning event naming the affected secrets.
+                  type: string
+                  enum:
+                    - Fail
+                    - Warn
+                  default: Fail
                 authentication:
                   type: object
                   properties:

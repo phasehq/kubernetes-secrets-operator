@@ -106,7 +106,7 @@ type appKeyTimestamps struct {
 	} `json:"apps"`
 }
 
-func (c *Client) GetSecrets(ctx context.Context, token, host, appName, appID, envName, path, tag string) (map[string]string, error) {
+func (c *Client) GetSecrets(ctx context.Context, token, host, appName, appID, envName, path, tag string, failOnReferenceError bool) (map[string]string, error) {
 	result := map[string]string{}
 	err := c.withRetry(ctx, func() error {
 		p, err := phasesdk.New(token, host, c.debug)
@@ -120,7 +120,7 @@ func (c *Client) GetSecrets(ctx context.Context, token, host, appName, appID, en
 			EnvName:                        envName,
 			Path:                           path,
 			Tag:                            tag,
-			FailOnReferenceResolutionError: true,
+			FailOnReferenceResolutionError: failOnReferenceError,
 		})
 		if err != nil {
 			return err

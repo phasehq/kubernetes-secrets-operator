@@ -53,6 +53,7 @@ func main() {
 	}
 
 	reconciler := phasecontroller.NewPhaseSecretReconciler(mgr.GetClient(), mgr.GetScheme())
+	reconciler.Recorder = mgr.GetEventRecorderFor("phase-secret-controller")
 	reconciler.MaxConcurrentReconciles = intEnv("PHASE_OPERATOR_MAX_CONCURRENT_RECONCILES", reconciler.MaxConcurrentReconciles)
 	if err := reconciler.SetupWithManager(mgr); err != nil {
 		ctrl.Log.Error(err, "unable to create PhaseSecret controller")

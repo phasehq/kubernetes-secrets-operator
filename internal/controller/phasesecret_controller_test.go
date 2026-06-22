@@ -33,7 +33,7 @@ func (f *fakePhaseClient) EnvironmentUpdatedAt(context.Context, string, string, 
 	return f.updatedAt, nil
 }
 
-func (f *fakePhaseClient) GetSecrets(context.Context, string, string, string, string, string, string, string) (map[string]string, error) {
+func (f *fakePhaseClient) GetSecrets(context.Context, string, string, string, string, string, string, string, bool) (map[string]string, error) {
 	f.getCalls++
 	return f.secrets, nil
 }
@@ -259,6 +259,46 @@ func TestRedeployLabelSelectorNarrowsDeploymentScan(t *testing.T) {
 	}
 }
 
+func TestReconcileContinuesPastFailingManagedReference(t *testing.T) {
+	ctx := context.Background()
+	scheme := testScheme(t)
+	ps := testPhaseSecret()
+	// The first reference fails to write; the second must still sync.
+	ps.Spec.ManagedSecretReferences = []phasev1.ManagedSecretReference{
+		{SecretName: "boom", SecretNamespace: "secrets-a", SecretType: string(corev1.SecretTypeOpaque)},
+		{SecretName: "good", SecretNamespace: "secrets-a", SecretType: string(corev1.SecretTypeOpaque)},
+	}
+	phase := &fakePhaseClient{
+		updatedAt: time.Date(2026, 6, 14, 12, 0, 0, 0, time.UTC),
+		secrets:   map[string]string{"API_KEY": "secret"},
+	}
+	base := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(&ps, tokenSecret("app-a", "phase-service-token")).Build()
+	k8sClient := &failingCreateClient{Client: base, failName: "boom"}
+	reconciler := testReconciler(k8sClient, scheme, phase, t.TempDir())
+
+	if _, err := reconciler.Reconcile(ctx, requestFor(ps)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	var good corev1.Secret
+	if err := base.Get(ctx, types.NamespacedName{Name: "good", Namespace: "secrets-a"}, &good); err != nil {
+		t.Fatalf("second managed secret was blocked by the first failure: %v", err)
+	}
+	var boom corev1.Secret
+	if err := base.Get(ctx, types.NamespacedName{Name: "boom", Namespace: "secrets-a"}, &boom); err == nil {
+		t.Fatal("failing managed secret should not have been created")
+	}
+
+	// Checkpoint must not advance while a reference fails: the next poll re-fetches.
+	if _, err := reconciler.Reconcile(ctx, requestFor(ps)); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+	if phase.getCalls != 2 {
+		t.Fatalf("checkpoint should not advance while a reference fails; full fetches = %d, want 2", phase.getCalls)
+	}
+}
+
 func testScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	scheme := runtime.NewScheme()
@@ -283,6 +323,18 @@ func (c *failingUpdateClient) Update(context.Context, client.Object, ...client.U
 func (c *failingUpdateClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 	c.deleteCalled = true
 	return c.Client.Delete(ctx, obj, opts...)
+}
+
+type failingCreateClient struct {
+	client.Client
+	failName string
+}
+
+func (c *failingCreateClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	if obj.GetName() == c.failName {
+		return errors.New("create failed")
+	}
+	return c.Client.Create(ctx, obj, opts...)
 }
 
 func testReconciler(k8sClient client.Client, scheme *runtime.Scheme, phase *fakePhaseClient, dir string) *PhaseSecretReconciler {

@@ -8,12 +8,17 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/user"
+	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	phasesdk "github.com/phasehq/golang-sdk/v2/phase"
 	"github.com/phasehq/golang-sdk/v2/phase/misc"
 	"github.com/phasehq/golang-sdk/v2/phase/network"
+
+	"github.com/phasehq/kubernetes-secrets-operator/internal/version"
 )
 
 type Client struct {
@@ -25,7 +30,7 @@ type Client struct {
 func NewFromEnv() *Client {
 	debug := boolEnv("PHASE_DEBUG", false)
 	misc.VerifySSL = boolEnv("PHASE_VERIFY_SSL", true)
-	network.SetUserAgent("phase-kubernetes-operator-go")
+	network.SetUserAgent(userAgent())
 
 	return &Client{
 		debug:   debug,
@@ -215,4 +220,19 @@ func durationSecondsEnv(name string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return time.Duration(parsed * float64(time.Second))
+}
+
+// userAgent builds the User-Agent sent to the Phase API, e.g.
+// "phase-kubernetes-operator/2.0.0 linux amd64 nonroot@<pod>". The user@host
+func userAgent() string {
+	parts := []string{
+		"phase-kubernetes-operator/" + version.Version,
+		runtime.GOOS + " " + runtime.GOARCH,
+	}
+	if u, err := user.Current(); err == nil {
+		if host, err := os.Hostname(); err == nil {
+			parts = append(parts, u.Username+"@"+host)
+		}
+	}
+	return strings.Join(parts, " ")
 }

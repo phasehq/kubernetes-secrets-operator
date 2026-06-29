@@ -1,18 +1,20 @@
-FROM python:3.12.1-alpine3.19
+FROM golang:1.26-alpine AS builder
 
-# Set the working directory in the container
-WORKDIR /app
+WORKDIR /workspace
 
-# Copy the necessary files
-COPY src/ /app/ 
-COPY requirements.txt /app/
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Install required Python packages
-RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY api/ api/
+COPY cmd/ cmd/
+COPY internal/ internal/
 
-# Create a non-root user
-RUN adduser -D operator-usr
-USER operator-usr
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /workspace/manager ./cmd/manager
 
-# Run the operator script using Kopf
-CMD ["kopf", "run", "/app/main.py"]
+FROM gcr.io/distroless/static-debian12:nonroot
+
+WORKDIR /
+COPY --from=builder /workspace/manager /manager
+
+USER 65532:65532
+ENTRYPOINT ["/manager"]

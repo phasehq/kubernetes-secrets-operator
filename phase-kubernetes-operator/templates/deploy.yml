@@ -16,10 +16,29 @@ spec:
       securityContext:
         runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
         runAsUser: {{ .Values.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.securityContext.runAsGroup }}
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+          - --metrics-bind-address=:8080
+          - --health-probe-bind-address=:8081
+        ports:
+          - name: metrics
+            containerPort: 8080
+            protocol: TCP
+          - name: health
+            containerPort: 8081
+            protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
         resources:
           {{- toYaml .Values.operator.resources | nindent 12 }}
         env:

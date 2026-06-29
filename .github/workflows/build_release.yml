@@ -1,49 +1,109 @@
-name: Build and Push Docker Image
+name: Operator CI
 
 on:
   pull_request:
     branches: [ main ]
+    paths:
+      - 'api/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - 'phase-kubernetes-operator/**'
+      - '.github/workflows/build_release.yml'
   push:
     branches: [ main ]
-    tags:
-      - 'v*'
+    paths:
+      - 'api/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - 'phase-kubernetes-operator/**'
+      - '.github/workflows/build_release.yml'
+  release:
+    types: [published]
 
 jobs:
-  build-and-push:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify module dependencies
+        run: go mod verify
+
+      - name: Build operator binary
+        run: go build -trimpath -ldflags="-s -w" -o /dev/null ./cmd/manager
+
+      - name: Run tests
+        run: go test -race -count=1 ./...
+
+  helm-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint operator chart
+        run: helm lint phase-kubernetes-operator/
+
+      - name: Render operator chart
+        run: helm template phase-kubernetes-operator phase-kubernetes-operator/ > /dev/null
+
+  build-and-push:
+    needs: [test, helm-test]
+    runs-on: ubuntu-latest
+    env:
+      STAGING_IMAGE: phasehq/kubernetes-operator-staging
+      PRODUCTION_IMAGE: phasehq/kubernetes-operator
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
         with:
           platforms: linux/amd64,linux/arm64
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Extract tag name
-        shell: bash
-        run: echo "##[set-output name=tag;]$(echo ${GITHUB_REF#refs/tags/})"
         id: extract_tag
+        if: github.event_name == 'release'
+        shell: bash
+        run: echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push (PR)
+      - name: Build and push staging image (PR)
         if: github.event_name == 'pull_request'
         run: |
           SHORT_SHA=${{ github.event.pull_request.head.sha }}
           echo "Short SHA: $SHORT_SHA"
-          docker buildx build --platform linux/amd64,linux/arm64 -t phasehq/kubernetes-operator:${SHORT_SHA:0:7} . --push
+          docker buildx build --platform linux/amd64,linux/arm64 -t ${STAGING_IMAGE}:${SHORT_SHA:0:7} . --push
 
-      - name: Build and push (Main branch)
+      - name: Build and push staging image (Main branch)
         if: github.ref == 'refs/heads/main'
         run: |
-          docker buildx build --platform linux/amd64,linux/arm64 -t phasehq/kubernetes-operator:main . --push
+          SHORT_SHA=${GITHUB_SHA::7}
+          docker buildx build --platform linux/amd64,linux/arm64 -t ${STAGING_IMAGE}:${SHORT_SHA} . --push
 
-      - name: Build and push (Release tag)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Build and push production image (Release tag)
+        if: github.event_name == 'release'
         run: |
-          docker buildx build --platform linux/amd64,linux/arm64 -t phasehq/kubernetes-operator:${{ steps.extract_tag.outputs.tag }} -t phasehq/kubernetes-operator:latest . --push
+          docker buildx build --platform linux/amd64,linux/arm64 -t ${PRODUCTION_IMAGE}:${{ steps.extract_tag.outputs.tag }} -t ${PRODUCTION_IMAGE}:latest . --push

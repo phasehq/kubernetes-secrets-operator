@@ -10,7 +10,8 @@ image:
 # Security context for the operator pod
 securityContext:
   runAsNonRoot: true
-  runAsUser: 1000
+  runAsUser: 65532
+  runAsGroup: 65532
 
 # Service account configuration
 serviceAccount:
@@ -27,6 +28,9 @@ operator:
   env:
     PHASE_VERIFY_SSL: True
     PHASE_DEBUG: False
+    PHASE_OPERATOR_HTTP_RETRIES: "5"
+    PHASE_OPERATOR_HTTP_BACKOFF: "1"
+    PHASE_OPERATOR_MAX_CONCURRENT_RECONCILES: "4"
   resources:
     limits:
       cpu: 200m

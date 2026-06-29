@@ -5,6 +5,7 @@ metadata:
   namespace: default
 spec:
   phaseApp: "your-phase-application" # The name of your Phase application
+  # phaseAppId: "your-phase-application-id" # OPTIONAL Exact Phase application ID. Takes precedence over phaseApp.
   phaseAppEnv: "production" # OPTIONAL The Phase application environment to fetch secrets from
   phaseAppEnvPath: "/" # OPTIONAL Path within the Phase application environment to fetch secrets from
   phaseHost: "https://console.phase.dev" # OPTIONAL - URL of a Phase Console instance
@@ -17,3 +18,16 @@ spec:
   managedSecretReferences: # Managed secrets in Kubernetes that Phase will sync secrets with
     - secretName: "my-application-secret" # Name of the managed secret in Kubernetes that will be consumed by your application
       secretNamespace: "default"
+      # template: # OPTIONAL metadata to apply to the managed Kubernetes Secret
+      #   metadata:
+      #     labels:
+      #       app.kubernetes.io/component: "application"
+      #     annotations:
+      #       example.com/owner: "platform"
+    # - secretName: "phase-managed-sa-token"
+    #   secretNamespace: "default"
+    #   secretType: "kubernetes.io/service-account-token"
+    #   template:
+    #     metadata:
+    #       annotations:
+    #         kubernetes.io/service-account.name: "my-service-account"

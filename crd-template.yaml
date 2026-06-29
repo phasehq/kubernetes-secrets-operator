@@ -28,10 +28,20 @@ spec:
             spec:
               type: object
               description: PhaseSecretSpec defines the desired state of PhaseSecret
+              anyOf:
+                - required:
+                    - phaseApp
+                - required:
+                    - phaseAppId
               properties:
                 phaseApp:
                   description: The Phase application to fetch secrets from.
                   type: string
+                  minLength: 1
+                phaseAppId:
+                  description: The Phase application ID to fetch secrets from. Takes precedence over phaseApp when set.
+                  type: string
+                  minLength: 1
                 phaseAppEnv:
                   description: The environment variable representing the app environment in Phase.
                   type: string
@@ -43,6 +53,17 @@ spec:
                 phaseAppEnvTag:
                   description: Tag for filtering secrets in the specified Phase app environment.
                   type: string
+                onSecretReferenceError:
+                  description: >-
+                    Policy when a Phase secret reference cannot be resolved. "Fail" (default)
+                    aborts the sync so unresolved values are never written to the managed
+                    Secret. "Warn" syncs anyway — leaving references as their literal ${...}
+                    text — and records a Warning event naming the affected secrets.
+                  type: string
+                  enum:
+                    - Fail
+                    - Warn
+                  default: Fail
                 authentication:
                   type: object
                   properties:
@@ -55,7 +76,6 @@ spec:
                           type: object
                           required:
                             - secretName
-                            - secretNamespace
                           properties:
                             secretName:
                               description: The name of the Kubernetes Secret.
@@ -74,8 +94,6 @@ spec:
                     type: object
                     required:
                       - secretName
-                      - secretNamespace
-                      - secretType
                     properties:
                       secretName:
                         description: The name of the Kubernetes Secret.
@@ -100,6 +118,7 @@ spec:
                         description: Default name transformer applied to all secret keys. Per-key nameTransformer in processors takes precedence.
                         type: string
                         enum:
+                          - "upper_snake"
                           - "camel"
                           - "upper-camel"
                           - "lower-snake"
@@ -118,6 +137,7 @@ spec:
                               description: The format for transforming the secret key name.
                               type: string
                               enum:
+                                - "upper_snake"
                                 - "camel"
                                 - "upper-camel"
                                 - "lower-snake"
@@ -130,15 +150,31 @@ spec:
                                 - "plain"
                                 - "base64"
                               default: "plain"
+                      template:
+                        description: Template metadata to apply to the managed Kubernetes Secret.
+                        type: object
+                        properties:
+                          metadata:
+                            type: object
+                            properties:
+                              labels:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                              annotations:
+                                type: object
+                                additionalProperties:
+                                  type: string
                 pollingInterval:
                   description: Interval at which to poll for secret updates.
                   type: integer
                   default: 60
                   minimum: 5
+                redeployLabelSelector:
+                  description: Optional label selector used to narrow Deployment scans for auto-redeploy.
+                  type: string
               required:
-                - phaseApp
                 - managedSecretReferences
-                - phaseHost
             status:
               description: PhaseSecretStatus defines the observed state of PhaseSecret
               type: object
@@ -183,8 +219,6 @@ spec:
                         description: Type of condition in CamelCase.
                         type: string
                         maxLength: 316
-              required:
-                - conditions
       served: true
       storage: true
       subresources:

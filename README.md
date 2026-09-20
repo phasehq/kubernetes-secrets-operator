@@ -45,7 +45,7 @@ helm repo add phase https://helm.phase.dev && helm repo update
 Install the Phase Secrets Operator:
 
 ```fish
-helm install phase-secrets-operator phase/phase-kubernetes-operator --set image.tag=v2.0.0
+helm install phase-secrets-operator phase/phase-kubernetes-operator --set image.tag=v2.0.1
 ```
 
     It's best practice to specify the version in production environments to avoid
@@ -216,14 +216,14 @@ operator:
 Helm does not upgrade CRDs automatically. Apply the v2 CRD from the chart `crds/` directory before upgrading:
 
 ```fish
-kubectl apply -f https://raw.githubusercontent.com/phasehq/kubernetes-secrets-operator/v2.0.0/phase-kubernetes-operator/crds/crd-template.yaml
+kubectl apply -f https://raw.githubusercontent.com/phasehq/kubernetes-secrets-operator/v2.0.1/phase-kubernetes-operator/crds/crd-template.yaml
 ```
 
 Upgrade the release:
 
 ```fish
 helm repo update phase
-helm upgrade phase-secrets-operator phase/phase-kubernetes-operator --set image.tag=v2.0.0
+helm upgrade phase-secrets-operator phase/phase-kubernetes-operator --set image.tag=v2.0.1
 ```
 
 Existing managed Secrets are preserved and the Go operator performs one full resync on startup. Existing v1 `PhaseSecret` resources may still have the legacy Kopf finalizer; remove it once after upgrading so future deletes do not hang:

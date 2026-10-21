@@ -1,6 +1,6 @@
 module github.com/phasehq/kubernetes-secrets-operator
 
-go 1.26.4
+go 1.26.10
 
 require (
 	github.com/phasehq/golang-sdk/v2 v2.4.1
